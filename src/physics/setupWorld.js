@@ -17,10 +17,23 @@ export function setupWorld(terrainData) {
   const heightfieldShape = new CANNON.Heightfield(terrainData.heights, {
     elementSize: terrainData.cellSize,
   });
-  const groundBody = new CANNON.Body({ mass: 0 });
+  const groundMaterial = new CANNON.Material('ground');
+  const groundBody = new CANNON.Body({ mass: 0, material: groundMaterial });
   groundBody.addShape(heightfieldShape);
   groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
   world.addBody(groundBody);
 
-  return { world, groundBody };
+  // Tuned for grip rather than bounce: high friction so tyres hold the trail, near-zero
+  // restitution so heightfield bumps don't launch the bike, and a stiffness bump (default
+  // is 1e7) to keep contact resolution firm against the terrain.
+  const bikeMaterial = new CANNON.Material('bike');
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(groundMaterial, bikeMaterial, {
+      friction: 0.8,
+      restitution: 0.02,
+      contactEquationStiffness: 1e8,
+    })
+  );
+
+  return { world, groundBody, bikeMaterial };
 }
