@@ -26,21 +26,13 @@ in their `source`/`license` fields and in the in-game credits overlay.
   [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/), via
   [Poly Pizza](https://poly.pizza/m/edNZoeH3lVP). Unlike the other assets below this is
   CC-BY, not CC0 — attribution is required, hence this entry.
+- **Ground texture** (`public/assets/textures/ground.jpg`): by Amal Kumar, via
+  [Poly Haven](https://polyhaven.com/textures), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+- **Sound effects & music** (`public/assets/audio/{wind,tire-roll,jump,crash,music}.mp3`):
+  [Freesound.org](https://freesound.org), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
-The ground texture and all sound effects/music are still generated procedurally
-in-browser (see `src/terrain/HeightmapTerrain.js`, `src/audio/AudioManager.js`) as
-placeholders — no external asset files are committed for those yet.
-
-Recommended CC0 (public domain) sources for real replacements, to credit here once
-something is added:
-
-- **Ground texture** (PBR): [Poly Haven textures](https://polyhaven.com/textures) — drop
-  at `public/assets/textures/ground.jpg`.
-- **Sound effects**: [Freesound.org](https://freesound.org) (filter to CC0 license) or
-  [Mixkit](https://mixkit.co/free-sound-effects/) — drop at
-  `public/assets/audio/{wind,tire-roll,jump,crash}.mp3`.
-- **Background music**: [OpenGameArt.org](https://opengameart.org) (search "CC0 music") —
-  drop at `public/assets/audio/music.mp3`.
+None of the above require attribution except the bike model, but all are listed here for
+completeness.
 
 Each of `BikeController.loadModel()`, `HeightmapTerrain.js`'s `loadRealGroundTexture()`
 and `AudioManager.init()` already try to load a real file from these paths first,
