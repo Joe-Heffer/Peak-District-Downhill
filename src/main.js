@@ -17,17 +17,20 @@ function resumeAudioOnGesture() {
   if (context.state === 'suspended') context.resume();
 }
 
+const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
+
 function renderCredits(terrainData, routeData) {
   const el = document.getElementById('credits');
   if (!el) return;
 
   if (terrainData.placeholder || routeData.placeholder) {
     el.textContent =
-      'Placeholder terrain/route data (not real survey data) — run `npm run terrain:build` for the real Cut Gate dataset.';
+      `Placeholder terrain/route data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
-  el.textContent = 'Terrain: Environment Agency LIDAR (OGL) · Route: OpenStreetMap contributors (ODbL)';
+  el.textContent =
+    `Terrain: Environment Agency LIDAR (OGL) · Route: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
 }
 
 async function init() {

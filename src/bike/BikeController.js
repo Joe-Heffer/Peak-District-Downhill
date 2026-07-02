@@ -12,11 +12,11 @@ const HARD_LANDING_VELOCITY = -8;
 const CAMERA_OFFSET = new THREE.Vector3(0, 3, -6);
 const CAMERA_LERP = 0.1;
 
-// Real model drop-in point: public/assets/models/bike.glb. Until one exists, loadModel()
-// below fails quietly and the procedural placeholder stays. Scale/rotation are unknown
-// until a real model is chosen, so tweak these once one is added.
+// Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
+// below fails quietly and the procedural placeholder stays. The model's native units are
+// millimeters (e.g. its wheels are ~634mm across), hence the 0.001 scale down to meters.
 const MODEL_URL = `${import.meta.env.BASE_URL}assets/models/bike.glb`;
-const MODEL_SCALE = 1;
+const MODEL_SCALE = 0.001;
 const MODEL_ROTATION_Y = 0;
 
 const gltfLoader = new GLTFLoader();
