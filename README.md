@@ -55,6 +55,11 @@ using open UK geodata (Environment Agency LIDAR, OpenStreetMap). See
 [`ATTRIBUTION.md`](ATTRIBUTION.md) for licensing details and
 [`tools/terrain/README.md`](tools/terrain/README.md) for how to (re)generate the data.
 
+## Generative AI usage
+
+This project's code was largely written with the help of generative AI — see
+[`AI_USAGE.md`](AI_USAGE.md) for details.
+
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the development
