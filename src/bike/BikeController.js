@@ -69,7 +69,12 @@ export class BikeController {
       position: new CANNON.Vec3(spawnPoint.x, spawnY, spawnPoint.z),
       linearDamping: 0.05,
     });
-    this.body.angularFactor.set(0, 1, 0);
+    // Heading is fully steering-controlled: applyInput() sets the body's orientation
+    // explicitly from `this.yaw` every frame. Locking all rotation axes (rather than
+    // just X/Z) stops ground-contact friction from also spinning the sphere collider
+    // around Y like a top, which would otherwise visibly rotate the bike model away
+    // from its steering heading.
+    this.body.angularFactor.set(0, 0, 0);
     world.addBody(this.body);
   }
 
