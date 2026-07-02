@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-const ROUTE_HEIGHT_OFFSET = 0.15;
-const ROUTE_RADIUS = 0.4;
+// Slightly raised to ensure the line doesn't z-fight with uneven terrain
+const ROUTE_HEIGHT_OFFSET = 0.25; 
 
 export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/routes/cutgate.json`) {
   const response = await fetch(url);
@@ -11,7 +11,7 @@ export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/route
   return response.json();
 }
 
-// Purely decorative — renders the real (or placeholder) route as a visible trail on the
+// Purely decorative — renders the route as a subtle dashed trail on the
 // terrain. Not tied to any gameplay/checkpoint logic.
 export function buildRouteOverlay(routeData, terrain) {
   const points = routeData.points.map(({ e, n }) => {
@@ -22,7 +22,25 @@ export function buildRouteOverlay(routeData, terrain) {
   });
 
   const curve = new THREE.CatmullRomCurve3(points);
-  const geometry = new THREE.TubeGeometry(curve, points.length * 4, ROUTE_RADIUS, 6, false);
-  const material = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-  return new THREE.Mesh(geometry, material);
+  
+  // Extract points along the curve to form our line
+  const curvePoints = curve.getPoints(points.length * 4);
+  const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+  
+  // Use a subtle dashed material instead of a solid tube
+  const material = new THREE.LineDashedMaterial({
+    color: 0xffcc00,
+    linewidth: 1, // Note: Most WebGL implementations enforce a max linewidth of 1
+    dashSize: 2.5,
+    gapSize: 5.0,
+    transparent: true,
+    opacity: 0.6
+  });
+
+  const line = new THREE.Line(geometry, material);
+  
+  // computeLineDistances is strictly required for LineDashedMaterial to render gaps!
+  line.computeLineDistances();
+
+  return line;
 }
