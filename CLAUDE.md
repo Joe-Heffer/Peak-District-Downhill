@@ -26,11 +26,11 @@ correctness check (run by CI on every push/PR to `main`).
 ## Structure
 
 - `index.html` — page shell, loads `src/main.js` as a module script.
-- `src/main.js` — async `init()`: loads baked terrain/route JSON, then wires up the
-  scene, physics world, bike, and input, then runs the render/physics tick loop. Also
-  spawns the bike at `routeData.points[0]` and renders the in-game credits/notice text
-  (into `#credits`): a placeholder-data warning when terrain or route data has
-  `placeholder: true`, otherwise the real OGL/ODbL attribution line.
+- `src/main.js` — async `init()`: loads baked terrain/route/landcover JSON, then wires
+  up the scene, physics world, bike, and input, then runs the render/physics tick loop.
+  Also spawns the bike at `routeData.points[0]` and renders the in-game credits/notice
+  text (into `#credits`): a placeholder-data warning when terrain, route, or landcover
+  data has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
 - `src/scene/setupScene.js` — Three.js scene, camera, renderer, lighting. Does not build
   any ground mesh itself — `main.js` adds the loaded terrain mesh.
 - `src/physics/setupWorld.js` — cannon-es world and a `CANNON.Heightfield` ground body
@@ -38,8 +38,10 @@ correctness check (run by CI on every push/PR to `main`).
 - `src/bike/BikeController.js` — bike mesh/body, steering, jump, camera follow,
   terrain-aware grounding (samples the shared height-lookup, not a hardcoded height).
 - `src/input/InputController.js` — keyboard and on-screen touch control state.
-- `src/terrain/` — loads `public/data/terrain/*.json` and builds the terrain mesh +
-  the `getHeightAt(x, z)` lookup shared by physics and the route overlay.
+- `src/terrain/` — loads `public/data/terrain/*.json` (elevation + landcover) and builds
+  the terrain mesh + the `getHeightAt(x, z)` lookup shared by physics and the route
+  overlay. Landcover drives per-vertex tint colors (grass/wood/rock/heather/track) on
+  the mesh's single `MeshStandardMaterial`, blended via `vertexColors`.
 - `src/routes/` — loads `public/data/routes/*.json` and renders the route as a
   decorative trail line on the terrain. `RouteOverlay.js` itself has no gameplay
   coupling, but `main.js` does use the route's first point to place the bike's spawn.
@@ -52,12 +54,12 @@ correctness check (run by CI on every push/PR to `main`).
 
 The game currently models one real location: Cut Gate, a Peak District bridleway
 descent. `tools/terrain/` is a dev-only, rerunnable Node pipeline (`npm run
-terrain:build`) that turns Environment Agency LIDAR elevation data and an OpenStreetMap
-route into the two baked JSON files under `public/data/` that the app fetches at
-runtime — see `tools/terrain/README.md` for the manual LIDAR download step and how to
-rerun it. The pipeline relies on the `geotiff` devDependency to parse LIDAR GeoTIFF
-tiles and `proj4` to reproject OSM's WGS84 coordinates into British National Grid.
-`public/data/**/*.json` are committed generated artifacts, like a lockfile;
+terrain:build`) that turns Environment Agency LIDAR elevation data and OpenStreetMap
+route/landcover data into the three baked JSON files under `public/data/` that the app
+fetches at runtime — see `tools/terrain/README.md` for the manual LIDAR download step
+and how to rerun it. The pipeline relies on the `geotiff` devDependency to parse LIDAR
+GeoTIFF tiles and `proj4` to reproject OSM's WGS84 coordinates into British National
+Grid. `public/data/**/*.json` are committed generated artifacts, like a lockfile;
 until real source data has been processed they hold a synthetic placeholder (`npm run
 terrain:placeholder`), clearly marked via a `placeholder: true` field.
 

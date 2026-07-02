@@ -4,6 +4,7 @@ import { setupWorld } from './physics/setupWorld.js';
 import { BikeController } from './bike/BikeController.js';
 import { createInputController } from './input/InputController.js';
 import { loadTerrainData } from './terrain/loadTerrainData.js';
+import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { loadRouteData, buildRouteOverlay } from './routes/RouteOverlay.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -21,18 +22,18 @@ function resumeAudioOnGesture() {
 
 const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
 
-function renderCredits(terrainData, routeData) {
+function renderCredits(terrainData, routeData, landcoverData) {
   const el = document.getElementById('credits');
   if (!el) return;
 
-  if (terrainData.placeholder || routeData.placeholder) {
+  if (terrainData.placeholder || routeData.placeholder || landcoverData.placeholder) {
     el.textContent =
-      `Placeholder terrain/route data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
+      `Placeholder terrain/route/landcover data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
   el.textContent =
-    `Terrain: Environment Agency LIDAR (OGL) · Route: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
+    `Terrain: Environment Agency LIDAR (OGL) · Route & landcover: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
 }
 
 function setUpMuteButton(musicAudio) {
@@ -58,10 +59,14 @@ function setUpMuteButton(musicAudio) {
 }
 
 async function init() {
-  const [terrainData, routeData] = await Promise.all([loadTerrainData(), loadRouteData()]);
-  renderCredits(terrainData, routeData);
+  const [terrainData, routeData, landcoverData] = await Promise.all([
+    loadTerrainData(),
+    loadRouteData(),
+    loadLandcoverData(),
+  ]);
+  renderCredits(terrainData, routeData, landcoverData);
 
-  const terrain = createTerrain(terrainData);
+  const terrain = createTerrain(terrainData, landcoverData);
 
   const { scene, camera, renderer } = setupScene();
   scene.add(terrain.mesh);

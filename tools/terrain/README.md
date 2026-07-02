@@ -2,9 +2,10 @@
 
 Dev-only Node scripts (not part of the shipped browser bundle) that turn real UK open
 geodata into the small baked JSON files the game loads at runtime
-(`public/data/terrain/cutgate.json`, `public/data/routes/cutgate.json`). Covers a single
-location for now: Cut Gate, the Peak District bridleway descent from Margery Hill down
-to the Upper Derwent Visitor Centre.
+(`public/data/terrain/cutgate.json`, `public/data/routes/cutgate.json`,
+`public/data/terrain/cutgate-landcover.json`). Covers a single location for now: Cut
+Gate, the Peak District bridleway descent from Margery Hill down to the Upper Derwent
+Visitor Centre.
 
 ## 1. Terrain — Environment Agency LIDAR
 
@@ -48,7 +49,30 @@ v3.0 — see `ATTRIBUTION` in `config.js` for the exact wording baked into the o
 Data is © OpenStreetMap contributors, ODbL 1.0 — attribution required, see
 `ATTRIBUTION` in `config.js`.
 
-## Or: run both together
+## 3. Landcover — OpenStreetMap
+
+Classifies the terrain grid into `grass`/`wood`/`rock`/`heather`/`track` for terrain
+tinting (`src/terrain/HeightmapTerrain.js`), by fetching `natural=wood`/`bare_rock`/
+`scree`/`heath` and `landuse=forest` polygons from Overpass and testing each terrain
+cell for containment, plus proximity to the route polyline for `track`. Fully
+scriptable — no manual step. Must run after steps 1 and 2, since it reads their output
+files (`cutgate.json`'s grid dimensions and the route's baked polyline) rather than
+recomputing them, to guarantee the landcover grid stays pixel-aligned with `heights`.
+
+```bash
+node tools/terrain/fetchLandcover.js
+```
+
+This writes `public/data/terrain/cutgate-landcover.json`.
+
+**v1 scope limit:** only simple closed OSM ways are classified as landcover polygons —
+multipolygon relations (some larger woods/heaths are mapped this way) are skipped with
+a warning, not classified. A documented limitation, not a bug — extend
+`buildPolygons()` in `fetchLandcover.js` if broader relation support is needed later.
+
+Same license as Route above (it's the same OSM/ODbL source).
+
+## Or: run all three together
 
 ```bash
 npm run terrain:build
@@ -57,7 +81,7 @@ npm run terrain:build
 ## Placeholder data
 
 `public/data/**/*.json` are generated artifacts checked into git (like a lockfile) so
-the app runs without anyone having to fetch real data first. Until the two steps above
+the app runs without anyone having to fetch real data first. Until the three steps above
 have been run with real source data, those files are a synthetic placeholder (see
 `generatePlaceholder.js`) — clearly marked with `"placeholder": true` and a notice in
 their `source`/`license` fields, and flagged in the in-game credits overlay. Regenerate

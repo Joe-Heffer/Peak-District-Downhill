@@ -7,7 +7,7 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "terrain:build": "node tools/terrain/buildTerrain.js && node tools/terrain/fetchRoute.js",
+    "terrain:build": "node tools/terrain/buildTerrain.js && node tools/terrain/fetchRoute.js && node tools/terrain/fetchLandcover.js",
     "terrain:placeholder": "node tools/terrain/generatePlaceholder.js"
   },
   "dependencies": {
