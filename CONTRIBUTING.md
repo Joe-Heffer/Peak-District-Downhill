@@ -29,6 +29,12 @@ normally don't need to touch them unless updating the route or resampling resolu
 See [`tools/terrain/README.md`](tools/terrain/README.md) for the manual data download
 step and how to rerun the pipeline (`npm run terrain:build`).
 
+Neither CI nor the Pages deploy workflow runs `terrain:build` — they only run `npm run
+build` (the Vite bundle). The live site always reflects whatever is already committed
+under `public/data/`, so if that's still the synthetic placeholder, the deployed game
+will show it (and the in-game notice) until someone runs `terrain:build` with real
+source data and commits the result.
+
 ## Commit messages
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/) and
