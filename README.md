@@ -33,13 +33,27 @@ npm run preview   # preview the production build locally
 
 ```
 src/
-  main.js                  # entry point and render/physics loop
+  main.js                  # entry point, async init, and render/physics loop
   scene/setupScene.js      # Three.js scene, camera, renderer, lighting
-  physics/setupWorld.js    # cannon-es physics world
-  bike/BikeController.js   # bike movement, physics sync, camera follow
+  physics/setupWorld.js    # cannon-es physics world + terrain heightfield
+  bike/BikeController.js   # bike movement, terrain-aware grounding, camera follow
   input/InputController.js # keyboard and touch input handling
+  terrain/                 # loads baked heightmap data, builds the terrain mesh
+  routes/                  # loads baked route data, renders the decorative trail line
   style.css
+public/data/
+  terrain/cutgate.json     # baked heightmap for the Cut Gate descent (generated)
+  routes/cutgate.json      # baked route polyline for the Cut Gate descent (generated)
+tools/terrain/              # dev-only scripts that (re)generate the files above from
+                             # real open geodata — see tools/terrain/README.md
 ```
+
+## Data & attribution
+
+The terrain and route are modelled on Cut Gate, a real Peak District bridleway descent,
+using open UK geodata (Environment Agency LIDAR, OpenStreetMap). See
+[`ATTRIBUTION.md`](ATTRIBUTION.md) for licensing details and
+[`tools/terrain/README.md`](tools/terrain/README.md) for how to (re)generate the data.
 
 ## Contributing
 

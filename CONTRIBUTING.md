@@ -15,12 +15,19 @@ This starts the Vite dev server at the URL printed in your terminal.
 
 1. Create a branch off `main`.
 2. Make your changes. Keep modules small and focused, following the existing
-   structure under `src/` (`scene/`, `physics/`, `bike/`, `input/`).
+   structure under `src/` (`scene/`, `physics/`, `bike/`, `input/`, `terrain/`, `routes/`).
 3. Confirm the app still builds: `npm run build`.
 4. Open a pull request against `main`.
 
 CI (`.github/workflows/ci.yml`) runs `npm ci && npm run build` on every push and pull
 request to `main`. Your PR must build successfully before it can be merged.
+
+## Updating Cut Gate terrain/route data
+
+`public/data/**/*.json` are generated artifacts checked into git (like a lockfile) — you
+normally don't need to touch them unless updating the route or resampling resolution.
+See [`tools/terrain/README.md`](tools/terrain/README.md) for the manual data download
+step and how to rerun the pipeline (`npm run terrain:build`).
 
 ## Commit messages
 
