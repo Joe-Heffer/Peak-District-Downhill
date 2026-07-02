@@ -22,16 +22,18 @@ in their `source`/`license` fields and in the in-game credits overlay.
 
 ## Visual & audio assets
 
-None yet. The bike model, ground texture and all sound effects/music are currently
-generated procedurally in-browser (see `src/bike/BikeController.js`,
-`src/terrain/HeightmapTerrain.js`, `src/audio/AudioManager.js`) as placeholders —
-no external asset files are committed.
+- **Bike model** (`public/assets/models/bike.glb`): "Bike" by Poly by Google, licensed
+  [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/), via
+  [Poly Pizza](https://poly.pizza/m/edNZoeH3lVP). Unlike the other assets below this is
+  CC-BY, not CC0 — attribution is required, hence this entry.
+
+The ground texture and all sound effects/music are still generated procedurally
+in-browser (see `src/terrain/HeightmapTerrain.js`, `src/audio/AudioManager.js`) as
+placeholders — no external asset files are committed for those yet.
 
 Recommended CC0 (public domain) sources for real replacements, to credit here once
 something is added:
 
-- **Bike model** (glTF/glb): [Poly Pizza](https://poly.pizza), [Kenney](https://kenney.nl/assets),
-  [Quaternius](https://quaternius.com/) — drop the file at `public/assets/models/bike.glb`.
 - **Ground texture** (PBR): [Poly Haven textures](https://polyhaven.com/textures) — drop
   at `public/assets/textures/ground.jpg`.
 - **Sound effects**: [Freesound.org](https://freesound.org) (filter to CC0 license) or
