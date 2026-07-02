@@ -1,7 +1,8 @@
 # Data attribution
 
-The Cut Gate terrain and route data (`public/data/terrain/cutgate.json`,
-`public/data/routes/cutgate.json`) are derived from open UK geodata:
+The Cut Gate terrain, route and landcover data (`public/data/terrain/cutgate.json`,
+`public/data/routes/cutgate.json`, `public/data/terrain/cutgate-landcover.json`) are
+derived from open UK geodata:
 
 ## Terrain
 
@@ -9,9 +10,11 @@ Contains public sector information licensed under the Open Government Licence v3
 © Environment Agency copyright and/or database right. Derived from the LIDAR Composite
 Digital Terrain Model (DTM), via [environment.data.gov.uk](https://environment.data.gov.uk/survey).
 
-## Route
+## Route & landcover
 
-© [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL 1.0.
+© [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL 1.0. The
+route is the Cut Gate bridleway way(s); landcover (woodland/rock/heather/track tinting)
+is classified from `natural`/`landuse` tags on nearby OSM ways.
 
 ---
 

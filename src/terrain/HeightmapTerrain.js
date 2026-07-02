@@ -7,6 +7,21 @@ const GROUND_TEXTURE_URL = `${import.meta.env.BASE_URL}assets/textures/ground.jp
 
 const textureLoader = new THREE.TextureLoader();
 
+// Landcover class -> vertex tint, multiplied against the ground texture/lighting.
+// `new THREE.Color(hex)` already converts from sRGB to the renderer's linear working
+// color space (THREE.ColorManagement is on by default) — no separate
+// convertSRGBToLinear() call needed here, and adding one would double-convert and
+// crush every non-white tint toward black.
+// Values are a starting point tuned near setupSky.js's #4a5d3a hemi-ground anchor;
+// eyeball against each `?sky=` preset and adjust if a class reads wrong.
+const CLASS_COLORS = {
+  grass: new THREE.Color(0xffffff), // neutral — texture shows through unchanged
+  wood: new THREE.Color(0x3d4d30), // darker olive canopy shade
+  rock: new THREE.Color(0x8f8a80), // warm grey — gritstone, not cool blue-grey
+  heather: new THREE.Color(0x6b5a5f), // muted brown-purple moorland
+  track: new THREE.Color(0x9c8a68), // lighter warm tan — legible rideable line
+};
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -57,11 +72,21 @@ function loadRealGroundTexture(material) {
 // this exact axis mapping is deliberately mirrored by the CANNON.Heightfield body built
 // in setupWorld.js (see the comment there) so the visual mesh and physics collider stay
 // pixel-aligned from the same `heights` array.
-export function buildTerrainMesh(terrainData) {
+export function buildTerrainMesh(terrainData, landcoverData = null) {
   const { cols, rows, cellSize, heights } = terrainData;
+
+  if (landcoverData && (landcoverData.cols !== cols || landcoverData.rows !== rows)) {
+    throw new Error(
+      'Landcover grid dimensions do not match the terrain grid — rerun tools/terrain/fetchLandcover.js.',
+    );
+  }
+  const palette = landcoverData
+    ? landcoverData.classes.map((name) => CLASS_COLORS[name] ?? CLASS_COLORS.grass)
+    : null;
 
   const positions = new Float32Array(cols * rows * 3);
   const uvs = new Float32Array(cols * rows * 2);
+  const colors = landcoverData ? new Float32Array(cols * rows * 3) : null;
   for (let i = 0; i < cols; i += 1) {
     for (let j = 0; j < rows; j += 1) {
       const posIndex = (i * rows + j) * 3;
@@ -72,6 +97,14 @@ export function buildTerrainMesh(terrainData) {
       const uvIndex = (i * rows + j) * 2;
       uvs[uvIndex] = (i * cellSize) / TILE_SIZE;
       uvs[uvIndex + 1] = (j * cellSize) / TILE_SIZE;
+
+      if (colors) {
+        const color = palette[landcoverData.landcover[i][j]];
+        const colorIndex = (i * rows + j) * 3;
+        colors[colorIndex] = color.r;
+        colors[colorIndex + 1] = color.g;
+        colors[colorIndex + 2] = color.b;
+      }
     }
   }
 
@@ -89,10 +122,14 @@ export function buildTerrainMesh(terrainData) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  if (colors) geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
 
-  const material = new THREE.MeshStandardMaterial({ map: createPlaceholderGroundTexture() });
+  const material = new THREE.MeshStandardMaterial({
+    map: createPlaceholderGroundTexture(),
+    vertexColors: Boolean(colors),
+  });
   loadRealGroundTexture(material);
   return new THREE.Mesh(geometry, material);
 }
@@ -124,9 +161,9 @@ export function createHeightLookup(terrainData) {
   };
 }
 
-export function createTerrain(terrainData) {
+export function createTerrain(terrainData, landcoverData) {
   return {
-    mesh: buildTerrainMesh(terrainData),
+    mesh: buildTerrainMesh(terrainData, landcoverData),
     getHeightAt: createHeightLookup(terrainData),
     data: terrainData,
   };

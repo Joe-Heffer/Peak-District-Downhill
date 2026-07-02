@@ -10,7 +10,6 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
-import proj4 from 'proj4';
 import {
   LOCAL_ORIGIN,
   OSM_WAY_IDS,
@@ -19,15 +18,7 @@ import {
   ROUTE_OUT,
   ATTRIBUTION,
 } from './config.js';
-
-// Standard OSGB36 National Grid definition (7-parameter Helmert approximation — accurate
-// to a few metres, not OSTN15 grid-accurate, which is fine for a game but not
-// survey-grade).
-proj4.defs(
-  'EPSG:27700',
-  '+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 ' +
-    '+ellps=airy +towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs',
-);
+import { wgs84ToLocalBng } from './projection.js';
 
 async function fetchWays(wayIds) {
   const query = `[out:json][timeout:90];way(id:${wayIds.join(',')});out geom;`;
@@ -88,11 +79,6 @@ function stitchWays(ways) {
   return chain;
 }
 
-function toLocalBng(lat, lon) {
-  const [easting, northing] = proj4('WGS84', 'EPSG:27700').forward([lon, lat]);
-  return { e: easting - LOCAL_ORIGIN.easting, n: northing - LOCAL_ORIGIN.northing };
-}
-
 async function main() {
   if (OSM_WAY_IDS.length === 0) {
     throw new Error('OSM_WAY_IDS is empty — fill in the Cut Gate way id(s) in tools/terrain/config.js first.');
@@ -100,7 +86,7 @@ async function main() {
 
   const ways = await fetchWays(OSM_WAY_IDS);
   const chain = stitchWays(ways);
-  let points = chain.map(({ lat, lon }) => toLocalBng(lat, lon));
+  let points = chain.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon));
 
   // Order so the first point is the north/high end (Margery Hill, top of the descent)
   // and the last is the south/low end (Upper Derwent Visitor Centre) — matches the
