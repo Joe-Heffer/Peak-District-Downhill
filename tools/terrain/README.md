@@ -8,12 +8,21 @@ to the Upper Derwent Visitor Centre.
 
 ## 1. Terrain — Environment Agency LIDAR
 
-1. Go to <https://environment.data.gov.uk/survey>, draw a box around the Cut Gate area
-   (see `BNG_BBOX` in `config.js` for the target bounding box in British National Grid
-   easting/northing), and download the **LIDAR Composite DTM** tile(s) covering it, as
-   ASCII grid (`.asc`) or GeoTIFF (`.tif`).
-2. Put the downloaded tile(s) in `tools/terrain/raw/` (gitignored — not committed).
-3. Run:
+1. Go to <https://environment.data.gov.uk/survey> and select the area covering
+   `BNG_BBOX` in `config.js` (British National Grid easting/northing), either by drawing
+   a box by hand, or, more precisely, via the portal's "Upload shapefile" option using a
+   generated shapefile:
+   ```bash
+   node tools/terrain/generateAoiShapefile.js
+   ```
+   This writes `tools/terrain/raw/aoi/cutgate-aoi.zip` (gitignored — a throwaway input to
+   the portal, not baked game data), a single rectangular polygon matching `BNG_BBOX` in
+   OSGB National Grid (EPSG:27700), zipped with the `.shp`/`.shx`/`.dbf`/`.prj` files the
+   upload widget requires.
+2. Download the **LIDAR Composite DTM** tile(s) covering that area, as ASCII grid
+   (`.asc`) or GeoTIFF (`.tif`).
+3. Put the downloaded tile(s) in `tools/terrain/raw/` (gitignored — not committed).
+4. Run:
    ```bash
    node tools/terrain/buildTerrain.js
    ```
@@ -60,6 +69,8 @@ npm run terrain:placeholder
 
 ## Why this isn't fully automated
 
-The Environment Agency LIDAR portal is a draw-a-box download UI, not a stable
-unauthenticated REST endpoint suitable for scripting — the tile download in step 1 is a
-manual, one-time step. Everything else is scriptable and rerunnable.
+The Environment Agency LIDAR portal is a browser download UI, not a stable
+unauthenticated REST endpoint suitable for scripting — selecting the area and downloading
+the tile(s) (steps 1-2 above) is a manual, one-time step, even though
+`generateAoiShapefile.js` can produce the area-of-interest upload for you. Everything else
+is scriptable and rerunnable.

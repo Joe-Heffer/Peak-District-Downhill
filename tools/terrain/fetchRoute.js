@@ -11,7 +11,14 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import proj4 from 'proj4';
-import { LOCAL_ORIGIN, OSM_WAY_IDS, OVERPASS_ENDPOINT, ROUTE_OUT, ATTRIBUTION } from './config.js';
+import {
+  LOCAL_ORIGIN,
+  OSM_WAY_IDS,
+  OVERPASS_ENDPOINT,
+  OVERPASS_USER_AGENT,
+  ROUTE_OUT,
+  ATTRIBUTION,
+} from './config.js';
 
 // Standard OSGB36 National Grid definition (7-parameter Helmert approximation — accurate
 // to a few metres, not OSTN15 grid-accurate, which is fine for a game but not
@@ -26,7 +33,10 @@ async function fetchWays(wayIds) {
   const query = `[out:json][timeout:90];way(id:${wayIds.join(',')});out geom;`;
   const response = await fetch(OVERPASS_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': OVERPASS_USER_AGENT,
+    },
     body: new URLSearchParams({ data: query }),
   });
   if (!response.ok) {
