@@ -18,6 +18,9 @@ This starts the Vite dev server at the URL printed in your terminal.
    structure under `src/` (`scene/`, `physics/`, `bike/`, `input/`, `terrain/`, `routes/`).
 3. Confirm the app still builds: `npm run build`.
 4. Open a pull request against `main`.
+5. **Merge with "Squash and merge"**, not "Create a merge commit". This repo's merge
+   button should have "Allow merge commits" disabled (GitHub repo Settings → General →
+   Pull Requests) — see the note under [Releases](#releases) for why.
 
 CI (`.github/workflows/ci.yml`) runs `npm ci && npm run build` on every push and pull
 request to `main`. Your PR must build successfully before it can be merged.
@@ -69,3 +72,14 @@ release pull request that bumps `package.json`/`package-lock.json` and updates
 
 Don't hand-edit `CHANGELOG.md` or bump the version in `package.json` manually — let
 release-please manage both from your Conventional Commit messages.
+
+**PRs into `main` must be squash-merged, not merged with a merge commit.** release-please
+walks `main`'s commit history to build the changelog. A regular merge commit's message
+body echoes the PR's conventional-commit title (e.g. `feat: ...`), so if the PR's own
+commit(s) are *also* still reachable on `main` (which they are, with a real merge
+commit), release-please parses both the merge commit and the original commit as
+separate entries with the same description — producing duplicate changelog lines (see
+[#18](https://github.com/Joe-Heffer/Peak-District-Downhill/pull/18)). Squash-merging
+collapses each PR to a single commit, so this can't happen; it's also what the
+[release-please docs recommend](https://github.com/googleapis/release-please#linear-git-commit-history-for-appropriately-updating-releases)
+for a linear, bisectable history.
