@@ -6,7 +6,7 @@ import { createInputController } from './input/InputController.js';
 import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
-import { loadRouteData, buildRouteOverlay } from './routes/RouteOverlay.js';
+import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 const TIRE_ROLL_VOLUME = 0.4;
@@ -73,7 +73,7 @@ async function init() {
   scene.add(buildRouteOverlay(routeData, terrain));
 
   const { world } = setupWorld(terrainData);
-  const spawnPoint = { x: routeData.points[0].e, z: -routeData.points[0].n };
+  const spawnPoint = routePointToWorld(routeData.points[0]);
   const bike = new BikeController(scene, world, camera, terrain, spawnPoint);
   const inputState = createInputController();
 

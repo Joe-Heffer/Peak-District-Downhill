@@ -22,7 +22,7 @@ const CLASS_COLORS = {
   track: new THREE.Color(0x9c8a68), // lighter warm tan — legible rideable line
 };
 
-function clamp(value, min, max) {
+export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 

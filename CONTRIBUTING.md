@@ -16,14 +16,20 @@ This starts the Vite dev server at the URL printed in your terminal.
 1. Create a branch off `main`.
 2. Make your changes. Keep modules small and focused, following the existing
    structure under `src/` (`scene/`, `physics/`, `bike/`, `input/`, `terrain/`, `routes/`).
-3. Confirm the app still builds: `npm run build`.
-4. Open a pull request against `main`.
-5. **Merge with "Squash and merge"**, not "Create a merge commit". This repo's merge
+3. Add or update tests: unit tests are colocated as `*.test.js` next to the file you
+   changed (`npm test` to run them, `npx vitest` to watch); for changes touching the
+   whole page (input wiring, credits text, overall load), also consider the e2e suite
+   under `e2e/` (`npm run build && npm run test:e2e`).
+4. Confirm the app still builds: `npm run build`.
+5. Open a pull request against `main`.
+6. **Merge with "Squash and merge"**, not "Create a merge commit". This repo's merge
    button should have "Allow merge commits" disabled (GitHub repo Settings → General →
    Pull Requests) — see the note under [Releases](#releases) for why.
 
-CI (`.github/workflows/ci.yml`) runs `npm ci && npm run build` on every push and pull
-request to `main`. Your PR must build successfully before it can be merged.
+CI (`.github/workflows/ci.yml`) runs three independent jobs on every push and pull
+request to `main`: `npm run build`, `npm test` (Vitest unit tests), and `npm run
+test:e2e` (Playwright e2e smoke test). Your PR must pass all three before it can be
+merged.
 
 ## Updating Cut Gate terrain/route data
 
