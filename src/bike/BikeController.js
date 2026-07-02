@@ -49,7 +49,7 @@ function createPlaceholderBikeModel() {
 }
 
 export class BikeController {
-  constructor(scene, world, camera, terrain, spawnPoint) {
+  constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial) {
     this.camera = camera;
     this.terrain = terrain;
     this.yaw = 0;
@@ -68,6 +68,7 @@ export class BikeController {
       shape: new CANNON.Sphere(RADIUS),
       position: new CANNON.Vec3(spawnPoint.x, spawnY, spawnPoint.z),
       linearDamping: 0.05,
+      material: bikeMaterial,
     });
     // Heading is fully steering-controlled: applyInput() sets the body's orientation
     // explicitly from `this.yaw` every frame. Locking all rotation axes (rather than
