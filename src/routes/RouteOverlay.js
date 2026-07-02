@@ -11,12 +11,17 @@ export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/route
   return response.json();
 }
 
+// Shared by buildRouteOverlay below and main.js's bike spawn point so the two never
+// drift apart on the e/n -> x/z conversion.
+export function routePointToWorld({ e, n }) {
+  return { x: e, z: -n };
+}
+
 // Purely decorative — renders the route as a subtle dashed trail on the
 // terrain. Not tied to any gameplay/checkpoint logic.
 export function buildRouteOverlay(routeData, terrain) {
   const points = routeData.points.map(({ e, n }) => {
-    const x = e;
-    const z = -n;
+    const { x, z } = routePointToWorld({ e, n });
     const y = terrain.getHeightAt(x, z) + ROUTE_HEIGHT_OFFSET;
     return new THREE.Vector3(x, y, z);
   });

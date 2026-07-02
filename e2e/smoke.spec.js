@@ -1,0 +1,78 @@
+import { expect, test } from '@playwright/test';
+
+test('game loads without errors, renders a canvas, and shows the correct credits', async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const consoleErrors = [];
+  const pageErrors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  // The browser's own default favicon.ico request 404s (index.html declares none) and
+  // Chromium logs that as a console error — harmless noise, unrelated to the app itself.
+  // Short-circuiting it here keeps the no-console-errors assertion meaningful.
+  await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204, body: '' }));
+
+  await page.goto('/');
+
+  const canvas = page.locator('#app canvas');
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  expect(box.width).toBeGreaterThan(0);
+  expect(box.height).toBeGreaterThan(0);
+
+  // The credits text depends on whether any of the three baked datasets are still the
+  // synthetic placeholder — fetch them directly and derive the expected branch instead of
+  // hardcoding one, so this stays correct whichever data is currently committed.
+  const [terrainData, routeData, landcoverData] = await Promise.all([
+    request.get(new URL('data/terrain/cutgate.json', baseURL).href).then((r) => r.json()),
+    request.get(new URL('data/routes/cutgate.json', baseURL).href).then((r) => r.json()),
+    request
+      .get(new URL('data/terrain/cutgate-landcover.json', baseURL).href)
+      .then((r) => r.json()),
+  ]);
+  const isPlaceholder = Boolean(
+    terrainData.placeholder || routeData.placeholder || landcoverData.placeholder,
+  );
+
+  const credits = page.locator('#credits');
+  if (isPlaceholder) {
+    await expect(credits).toContainText('Placeholder terrain/route/landcover data');
+  } else {
+    await expect(credits).toContainText('Environment Agency LIDAR');
+  }
+
+  // Let the render/physics tick loop run for a few frames — a crash in the game loop
+  // (e.g. bad grounding/height-lookup math) would otherwise only surface as a console
+  // error a beat after load, not on the very first paint.
+  await page.waitForFunction(() => {
+    const el = document.querySelector('#app canvas');
+    return el && el.width > 0 && el.height > 0;
+  });
+  await page.waitForTimeout(500);
+
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+test('mute button toggles aria-pressed', async ({ page }) => {
+  await page.goto('/');
+
+  const muteButton = page.locator('#mute-btn');
+  await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
+
+  // The button element is present from index.html immediately, but its click listener is
+  // only wired up once init()'s audio buffers finish decoding — retry the click rather
+  // than guessing a fixed delay.
+  await expect(async () => {
+    await muteButton.click();
+    await expect(muteButton).toHaveAttribute('aria-pressed', 'true', { timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+
+  await muteButton.click();
+  await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
+});

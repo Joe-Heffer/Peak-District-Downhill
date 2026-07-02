@@ -7,7 +7,7 @@ Guidance for Claude Code when working in this repository.
 Peak District Downhill is a browser-based 3D mountain biking game rendered with
 [Three.js](https://threejs.org/) and simulated with [cannon-es](https://github.com/pmndrs/cannon-es),
 built and served with [Vite](https://vitejs.dev/). Plain JavaScript (ES modules) —
-no TypeScript, no UI framework, no test runner, no linter currently configured.
+no TypeScript, no UI framework, no linter currently configured.
 
 ## Commands
 
@@ -16,12 +16,15 @@ npm install                  # install dependencies
 npm run dev                  # start the Vite dev server (--host)
 npm run build                # production build, outputs to dist/
 npm run preview              # preview the production build (--host)
+npm test                     # run the Vitest unit suite once (src/**/*.test.js)
+npx vitest                   # unit tests in interactive watch mode
+npm run test:e2e             # Playwright e2e smoke test (needs `npm run build` first)
 npm run terrain:build        # rerun the LIDAR+OSM pipeline (see tools/terrain/README.md)
 npm run terrain:placeholder  # regenerate the synthetic placeholder data
 ```
 
-There is no test or lint command yet. `npm run build` is the only automated
-correctness check (run by CI on every push/PR to `main`).
+`npm run build`, `npm test`, and `npm run test:e2e` all run in CI (as independent
+parallel jobs) on every push/PR to `main`. There is still no linter configured.
 
 ## Structure
 
@@ -44,7 +47,8 @@ correctness check (run by CI on every push/PR to `main`).
   the mesh's single `MeshStandardMaterial`, blended via `vertexColors`.
 - `src/routes/` — loads `public/data/routes/*.json` and renders the route as a
   decorative trail line on the terrain. `RouteOverlay.js` itself has no gameplay
-  coupling, but `main.js` does use the route's first point to place the bike's spawn.
+  coupling, but `main.js` does use the route's first point (via the shared
+  `routePointToWorld` helper) to place the bike's spawn.
 - `vite.config.js` — sets `base` to `/Peak-District-Downhill/` under GitHub Actions
   (GitHub Pages subpath), `/` otherwise. Runtime `fetch()` calls for terrain/route data
   must build their URL from `import.meta.env.BASE_URL`, not a hardcoded leading slash,
@@ -69,9 +73,24 @@ deliberately matched axis mapping (`i`→world x, `j`→world `-z`, value→worl
 via the heightfield body's -90°-about-X rotation) so they stay pixel-aligned. Don't
 change one side's indexing/rotation without updating the other to match.
 
+## Tests
+
+- Unit tests (Vitest) are colocated as `src/**/*.test.js` next to the module they cover
+  — e.g. `src/terrain/HeightmapTerrain.test.js`, `src/physics/setupWorld.test.js`,
+  `src/routes/RouteOverlay.test.js`, `src/input/InputController.test.js` (runs under
+  jsdom via a `// @vitest-environment jsdom` docblock), `src/bike/BikeController.test.js`.
+  Most run under Vitest's default `node` environment using real `three`/`cannon-es`
+  objects with a stub `terrain`, no DOM needed.
+- The e2e smoke test (`e2e/smoke.spec.js`, Playwright) boots `vite preview` and checks
+  the canvas renders, there are no console/page errors, `#credits` shows the correct
+  placeholder-vs-real-data text, and the mute button toggles — this is what catches the
+  GitHub Pages `base`/`BASE_URL` subpath class of bug.
+
 ## CI/CD
 
-- `.github/workflows/ci.yml` — installs and builds on push/PR to `main`.
+- `.github/workflows/ci.yml` — installs and builds, runs the Vitest unit suite, and
+  runs the Playwright e2e smoke suite (three independent parallel jobs) on push/PR to
+  `main`.
 - `.github/workflows/deploy.yml` — builds and deploys `dist/` to GitHub Pages on push
   to `main`, or on manual `workflow_dispatch`.
 - `.github/workflows/release-please.yml` — maintains a release PR and cuts GitHub
