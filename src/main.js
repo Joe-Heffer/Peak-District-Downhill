@@ -9,6 +9,8 @@ import { loadRouteData, buildRouteOverlay } from './routes/RouteOverlay.js';
 import { AudioManager } from './audio/AudioManager.js';
 
 const TIRE_ROLL_VOLUME = 0.4;
+const MUSIC_VOLUME = 0.25;
+const MUSIC_MUTED_KEY = 'musicMuted';
 
 // Autoplay policies suspend the AudioContext until a user gesture — resume it on the
 // first keypress/tap rather than gating gameplay on it.
@@ -33,6 +35,28 @@ function renderCredits(terrainData, routeData) {
     `Terrain: Environment Agency LIDAR (OGL) · Route: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
 }
 
+function setUpMuteButton(musicAudio) {
+  const button = document.getElementById('mute-btn');
+  if (!button || !musicAudio) return;
+
+  let muted = localStorage.getItem(MUSIC_MUTED_KEY) === 'true';
+
+  function applyMuteState() {
+    musicAudio.setVolume(muted ? 0 : MUSIC_VOLUME);
+    button.textContent = muted ? '\u{1F507}' : '\u{1F50A}';
+    button.setAttribute('aria-pressed', String(muted));
+    button.setAttribute('aria-label', muted ? 'Unmute music' : 'Mute music');
+  }
+
+  button.addEventListener('click', () => {
+    muted = !muted;
+    localStorage.setItem(MUSIC_MUTED_KEY, String(muted));
+    applyMuteState();
+  });
+
+  applyMuteState();
+}
+
 async function init() {
   const [terrainData, routeData] = await Promise.all([loadTerrainData(), loadRouteData()]);
   renderCredits(terrainData, routeData);
@@ -53,9 +77,10 @@ async function init() {
 
   const audioManager = new AudioManager(camera);
   await audioManager.init(import.meta.env.BASE_URL);
-  audioManager.playLoop('music', 0.25);
+  const musicAudio = audioManager.playLoop('music', MUSIC_VOLUME);
   audioManager.playLoop('wind', 0.3);
   const tireRollAudio = audioManager.playLoop('tireRoll', 0);
+  setUpMuteButton(musicAudio);
 
   const clock = new THREE.Clock();
 
