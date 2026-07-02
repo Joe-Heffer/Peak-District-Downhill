@@ -22,6 +22,20 @@ html, body {
   display: block;
 }
 
+#credits {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  max-width: 60vw;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(20, 20, 20, 0.35);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
 #controls {
   position: fixed;
   inset: 0;

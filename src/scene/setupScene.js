@@ -11,13 +11,15 @@ export function setupScene() {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
-  scene.fog = new THREE.Fog(0x87ceeb, 40, 200);
+  // Cut Gate's real terrain spans kilometres, not the old 200x200 flat toy plane, so
+  // fog/far-plane distances are pushed out well beyond the old flat-plane tuning.
+  scene.fog = new THREE.Fog(0x87ceeb, 100, 4000);
 
   const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
     0.1,
-    500,
+    6000,
   );
   camera.position.set(0, 4, -8);
 
@@ -28,17 +30,11 @@ export function setupScene() {
   dirLight.position.set(5, 10, 5);
   scene.add(dirLight);
 
-  const groundGeometry = new THREE.PlaneGeometry(200, 200);
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4a5d3a });
-  const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
-
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, ground };
+  return { scene, camera, renderer };
 }

@@ -24,14 +24,40 @@ correctness check (run by CI on every push/PR to `main`).
 ## Structure
 
 - `index.html` — page shell, loads `src/main.js` as a module script.
-- `src/main.js` — wires up the scene, physics world, bike, and input, then runs the
-  render/physics tick loop.
-- `src/scene/setupScene.js` — Three.js scene, camera, renderer, lighting, ground plane.
-- `src/physics/setupWorld.js` — cannon-es world and ground body.
-- `src/bike/BikeController.js` — bike mesh/body, steering, jump, camera follow.
+- `src/main.js` — async `init()`: loads baked terrain/route JSON, then wires up the
+  scene, physics world, bike, and input, then runs the render/physics tick loop.
+- `src/scene/setupScene.js` — Three.js scene, camera, renderer, lighting. Does not build
+  any ground mesh itself — `main.js` adds the loaded terrain mesh.
+- `src/physics/setupWorld.js` — cannon-es world and a `CANNON.Heightfield` ground body
+  built from the same baked elevation grid as the visual terrain mesh.
+- `src/bike/BikeController.js` — bike mesh/body, steering, jump, camera follow,
+  terrain-aware grounding (samples the shared height-lookup, not a hardcoded height).
 - `src/input/InputController.js` — keyboard and on-screen touch control state.
+- `src/terrain/` — loads `public/data/terrain/*.json` and builds the terrain mesh +
+  the `getHeightAt(x, z)` lookup shared by physics and the route overlay.
+- `src/routes/` — loads `public/data/routes/*.json` and renders the route as a
+  decorative trail line on the terrain (no gameplay coupling).
 - `vite.config.js` — sets `base` to `/Peak-District-Downhill/` under GitHub Actions
-  (GitHub Pages subpath), `/` otherwise.
+  (GitHub Pages subpath), `/` otherwise. Runtime `fetch()` calls for terrain/route data
+  must build their URL from `import.meta.env.BASE_URL`, not a hardcoded leading slash,
+  or they 404 under the Pages subpath.
+
+## Terrain & route data
+
+The game currently models one real location: Cut Gate, a Peak District bridleway
+descent. `tools/terrain/` is a dev-only, rerunnable Node pipeline (`npm run
+terrain:build`) that turns Environment Agency LIDAR elevation data and an OpenStreetMap
+route into the two baked JSON files under `public/data/` that the app fetches at
+runtime — see `tools/terrain/README.md` for the manual LIDAR download step and how to
+rerun it. `public/data/**/*.json` are committed generated artifacts, like a lockfile;
+until real source data has been processed they hold a synthetic placeholder (`npm run
+terrain:placeholder`), clearly marked via a `placeholder: true` field.
+
+The terrain mesh (`src/terrain/HeightmapTerrain.js`) and the physics heightfield
+(`src/physics/setupWorld.js`) are built from the exact same `heights[i][j]` array with a
+deliberately matched axis mapping (`i`→world x, `j`→world `-z`, value→world y, achieved
+via the heightfield body's -90°-about-X rotation) so they stay pixel-aligned. Don't
+change one side's indexing/rotation without updating the other to match.
 
 ## CI/CD
 

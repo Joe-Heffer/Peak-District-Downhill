@@ -141,3 +141,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Manually-downloaded raw terrain source tiles (see tools/terrain/README.md)
+tools/terrain/raw/*
+!tools/terrain/raw/.gitkeep
