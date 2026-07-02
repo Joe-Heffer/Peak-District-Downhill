@@ -17,7 +17,9 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   // Short-circuiting it here keeps the no-console-errors assertion meaningful.
   await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204, body: '' }));
 
-  await page.goto('/');
+  // A leading slash would resolve against the server root, discarding the GitHub Pages
+  // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
+  await page.goto('./');
 
   const canvas = page.locator('#app canvas');
   await expect(canvas).toBeVisible();
@@ -60,7 +62,9 @@ test('game loads without errors, renders a canvas, and shows the correct credits
 });
 
 test('mute button toggles aria-pressed', async ({ page }) => {
-  await page.goto('/');
+  // A leading slash would resolve against the server root, discarding the GitHub Pages
+  // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
+  await page.goto('./');
 
   const muteButton = page.locator('#mute-btn');
   await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
