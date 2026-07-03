@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { routePointToWorld } from './RouteOverlay.js';
 
 // Width (metres) + tint + terrain-height offset per category. All offsets are smaller
-// than RouteOverlay.js's ROUTE_HEIGHT_OFFSET (0.25) so the Cut Gate yellow dashed line
-// always renders visibly on top at any junction/crossing, and are distinct per category
-// so two crossing ribbons don't sit exactly coplanar with each other.
+// than RouteOverlay.js's ROUTE_HEIGHT_OFFSET so the Cut Gate green dashed route always
+// renders visibly above at any junction/crossing, and are distinct per category so two
+// crossing ribbons don't sit exactly coplanar with each other.
 export const PATH_STYLES = {
   road: { width: 3.5, color: 0x8c8c8c, heightOffset: 0.1 }, // grey — tarmac/estate-track width
   bridleway: { width: 1.8, color: 0xa9895f, heightOffset: 0.12 }, // tan dirt, medium

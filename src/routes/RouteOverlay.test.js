@@ -39,13 +39,13 @@ describe('buildRouteOverlay', () => {
 
     expect(positions[0]).toBeCloseTo(expectedFirst.x);
     expect(positions[2]).toBeCloseTo(expectedFirst.z);
-    expect(positions[1]).toBeCloseTo(terrain.getHeightAt(expectedFirst.x, expectedFirst.z) + 0.25);
+    expect(positions[1]).toBeCloseTo(terrain.getHeightAt(expectedFirst.x, expectedFirst.z) + 1.5);
 
     const lastIndex = positions.length - 3;
     expect(positions[lastIndex]).toBeCloseTo(expectedLast.x);
     expect(positions[lastIndex + 2]).toBeCloseTo(expectedLast.z);
     expect(positions[lastIndex + 1]).toBeCloseTo(
-      terrain.getHeightAt(expectedLast.x, expectedLast.z) + 0.25,
+      terrain.getHeightAt(expectedLast.x, expectedLast.z) + 1.5,
     );
   });
 });
