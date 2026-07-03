@@ -13,6 +13,7 @@ import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
 import { createDevTools } from './devtools/DevTools.js';
+import { buildFeedbackIssueUrl } from './feedback/FeedbackUrl.js';
 
 const TIRE_ROLL_VOLUME = 0.4;
 const MUSIC_VOLUME = 0.25;
@@ -80,6 +81,15 @@ function setUpMuteButton(musicAudio) {
   applyMuteState();
 }
 
+function setUpFeedbackButton() {
+  const button = document.getElementById('feedback-btn');
+  if (!button) return;
+
+  button.addEventListener('click', () => {
+    window.open(buildFeedbackIssueUrl(), '_blank', 'noopener');
+  });
+}
+
 async function init() {
   const devTools = createDevTools();
 
@@ -119,6 +129,7 @@ async function init() {
   audioManager.playLoop('wind', 0.3);
   const tireRollAudio = audioManager.playLoop('tireRoll', 0);
   setUpMuteButton(musicAudio);
+  setUpFeedbackButton();
 
   const clock = new THREE.Clock();
   let timeSinceLocationUpdate = 0;
