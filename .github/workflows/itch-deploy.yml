@@ -20,7 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run build:itch
       - name: Publish to itch.io
-        uses: manleydev/butler-publish-itchio-action@v1
+        uses: manleydev/butler-publish-itchio-action@v1.2.0
         env:
           BUTLER_CREDENTIALS: ${{ secrets.BUTLER_API_KEY }}
           CHANNEL: html5
