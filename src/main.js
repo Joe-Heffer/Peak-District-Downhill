@@ -140,7 +140,7 @@ async function init() {
 
       const jumped = bike.applyInput(dt, inputState);
       world.step(1 / 60, dt, 10);
-      bike.syncAfterStep();
+      bike.syncAfterStep(dt);
 
       if (jumped) audioManager.playOnce('jump', 0.6);
       if (bike.hardLanding) audioManager.playOnce('crash', 0.8);
