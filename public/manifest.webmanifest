@@ -1,0 +1,21 @@
+{
+  "name": "Gravity & Grit: Peak District Downhill",
+  "short_name": "Gravity & Grit",
+  "description": "A free browser-based 3D downhill mountain-biking game — ride real Peak District bridleways.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#87ceeb",
+  "theme_color": "#3d2f56",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
