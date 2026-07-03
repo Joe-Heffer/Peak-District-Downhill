@@ -92,12 +92,12 @@ async function init() {
 
   const terrain = createTerrain(terrainData, landcoverData);
 
-  const { scene, camera, renderer } = setupScene();
+  const { scene, camera, renderer, isNight } = setupScene();
   scene.add(terrain.mesh);
   scene.add(buildRouteOverlay(routeData, terrain));
 
   const { world, bikeMaterial } = setupWorld(terrainData);
-  const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial);
+  const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight);
   const inputState = createInputController();
 
   window.addEventListener('keydown', resumeAudioOnGesture, { once: true });
