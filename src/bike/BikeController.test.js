@@ -222,14 +222,61 @@ describe('BikeController stamina', () => {
     expect(bike.stamina).toBeGreaterThan(staminaAfterPedalling);
   });
 
-  it('does not drain below 0, and pedalling with empty stamina no longer boosts speed', () => {
+  it('does not drain below 0 while pedal is held', () => {
     const bike = createBike();
     bike.stamina = 0;
     bike.speed = 3;
 
     bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
     expect(bike.stamina).toBe(0);
-    expect(bike.speed).toBeLessThan(3); // falls back to plain coast (drag/rolling resistance)
+  });
+
+  it('pedalling with empty stamina applies the weaker steady accel instead of zero propulsion', () => {
+    const bike = createBike();
+    bike.stamina = 0;
+    bike.speed = 3;
+
+    bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
+    expect(bike.speed).toBeGreaterThan(3); // steady accel still beats rolling resistance/drag
+  });
+
+  it('applies less propulsion at 0 stamina (steady rate) than at full stamina (burst rate)', () => {
+    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+
+    const burstBike = createBike();
+    burstBike.speed = 3;
+    burstBike.applyInput(1, pedalInput);
+
+    const steadyBike = createBike();
+    steadyBike.stamina = 0;
+    steadyBike.speed = 3;
+    steadyBike.applyInput(1, pedalInput);
+
+    expect(steadyBike.speed).toBeGreaterThan(3);
+    expect(steadyBike.speed).toBeLessThan(burstBike.speed);
+  });
+
+  it('keeps stamina pinned at 0 while holding pedal at the steady rate, and only regenerates once released', () => {
+    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const bike = createBike();
+    bike.stamina = 0;
+
+    bike.applyInput(1, pedalInput);
+    expect(bike.stamina).toBe(0);
+
+    bike.applyInput(1, { ...pedalInput, pedal: false });
+    expect(bike.stamina).toBeGreaterThan(0);
+  });
+
+  it('drains over the new, longer burst duration rather than the old ~6s one', () => {
+    const bike = createBike();
+    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+
+    bike.applyInput(6, pedalInput); // old ~6s full-drain duration
+    expect(bike.stamina).toBeGreaterThan(0); // must not be empty yet under the new tuning
+
+    bike.applyInput(9, pedalInput); // total 15s, matching STAMINA_DRAIN_RATE = 1/15
+    expect(bike.stamina).toBe(0);
   });
 
   it('does not regenerate above MAX_STAMINA', () => {
