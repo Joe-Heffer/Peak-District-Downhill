@@ -7,6 +7,7 @@ import { createTiltController, isTiltSupported } from './input/TiltController.js
 import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
+import { createRockTrackMaterial } from './terrain/RockTrackTexture.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
 import { loadPathsData, buildPathsOverlay } from './routes/PathsOverlay.js';
 import { buildScenery } from './scenery/Scenery.js';
@@ -142,8 +143,9 @@ async function init() {
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const terrain = createTerrain(terrainData, landcoverData, maxAnisotropy);
   scene.add(terrain.mesh);
-  scene.add(buildPathsOverlay(pathsData, terrain));
-  scene.add(buildRouteOverlay(routeData, terrain));
+  const rockTrackMaterial = createRockTrackMaterial(maxAnisotropy);
+  scene.add(buildPathsOverlay(pathsData, terrain, rockTrackMaterial));
+  scene.add(buildRouteOverlay(routeData, terrain, rockTrackMaterial));
   scene.add(buildScenery(routeData, terrain));
 
   const { world, bikeMaterial } = setupWorld(terrainData);
