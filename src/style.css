@@ -71,6 +71,11 @@ html, body {
   gap: 16px;
 }
 
+#action-group {
+  display: flex;
+  gap: 16px;
+}
+
 .control-zone {
   pointer-events: auto;
   touch-action: none;
@@ -100,4 +105,15 @@ html, body {
 
 .control-zone--jump:active {
   background: rgba(180, 40, 40, 0.8);
+}
+
+.control-zone--brake {
+  font-size: 16px;
+  width: 96px;
+  height: 96px;
+  background: rgba(200, 150, 20, 0.55);
+}
+
+.control-zone--brake:active {
+  background: rgba(200, 150, 20, 0.8);
 }
