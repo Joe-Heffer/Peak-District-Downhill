@@ -1,4 +1,4 @@
-# Peak District Downhill
+# Gravity & Grit: Peak District Downhill
 
 [![CI](https://github.com/Joe-Heffer/Peak-District-Downhill/actions/workflows/ci.yml/badge.svg)](https://github.com/Joe-Heffer/Peak-District-Downhill/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Joe-Heffer/Peak-District-Downhill/actions/workflows/deploy.yml/badge.svg)](https://github.com/Joe-Heffer/Peak-District-Downhill/actions/workflows/deploy.yml)
@@ -7,6 +7,10 @@
 
 A browser-based 3D mountain biking game set in the Peak District, built with
 [Three.js](https://threejs.org/) and [cannon-es](https://github.com/pmndrs/cannon-es).
+Ride as **Gravity** and **Grit** down real Peak District bridleways — see
+[issue #28](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/28) for the
+naming decision and [`docs/concept-art-prompts.md`](docs/concept-art-prompts.md) for
+the concept art direction.
 
 Play it live at **[joe-heffer.github.io/Peak-District-Downhill](https://joe-heffer.github.io/Peak-District-Downhill/)**.
 
