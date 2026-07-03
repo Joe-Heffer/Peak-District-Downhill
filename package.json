@@ -9,7 +9,7 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "terrain:build": "node tools/terrain/buildTerrain.js && node tools/terrain/fetchRoute.js && node tools/terrain/fetchLandcover.js",
+    "terrain:build": "node tools/terrain/buildTerrain.js && node tools/terrain/fetchRoute.js && node tools/terrain/fetchLandcover.js && node tools/terrain/fetchPaths.js",
     "terrain:placeholder": "node tools/terrain/generatePlaceholder.js"
   },
   "dependencies": {

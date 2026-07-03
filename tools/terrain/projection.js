@@ -24,3 +24,21 @@ export function bngToWgs84(easting, northing) {
   const [lon, lat] = proj4('EPSG:27700', 'WGS84').forward([easting, northing]);
   return { lat, lon };
 }
+
+// Local WGS84 bbox of a BNG bbox, expanded across all 4 corners (not just two opposite
+// ones) since transverse-Mercator reprojection isn't axis-aligned. Shared by
+// fetchLandcover.js and fetchPaths.js, which both need a WGS84 bbox to query Overpass.
+export function wgs84BboxOf(bngBbox) {
+  const corners = [
+    bngToWgs84(bngBbox.minE, bngBbox.minN),
+    bngToWgs84(bngBbox.maxE, bngBbox.minN),
+    bngToWgs84(bngBbox.maxE, bngBbox.maxN),
+    bngToWgs84(bngBbox.minE, bngBbox.maxN),
+  ];
+  return {
+    south: Math.min(...corners.map((c) => c.lat)),
+    north: Math.max(...corners.map((c) => c.lat)),
+    west: Math.min(...corners.map((c) => c.lon)),
+    east: Math.max(...corners.map((c) => c.lon)),
+  };
+}

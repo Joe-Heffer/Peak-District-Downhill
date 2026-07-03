@@ -7,6 +7,7 @@ import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
+import { loadPathsData, buildPathsOverlay } from './routes/PathsOverlay.js';
 import { buildScenery } from './scenery/Scenery.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
@@ -28,18 +29,18 @@ function resumeAudioOnGesture() {
 
 const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
 
-function renderCredits(terrainData, routeData, landcoverData) {
+function renderCredits(terrainData, routeData, landcoverData, pathsData) {
   const el = document.getElementById('credits');
   if (!el) return;
 
-  if (terrainData.placeholder || routeData.placeholder || landcoverData.placeholder) {
+  if (terrainData.placeholder || routeData.placeholder || landcoverData.placeholder || pathsData.placeholder) {
     el.textContent =
-      `Placeholder terrain/route/landcover data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
+      `Placeholder terrain/route/landcover/paths data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
   el.textContent =
-    `Terrain: Environment Agency LIDAR (OGL) · Route & landcover: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
+    `Terrain: Environment Agency LIDAR (OGL) · Route, paths & landcover: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
 }
 
 // Placeholder terrain has no real grid origin to convert from, and placeholder route
@@ -82,12 +83,13 @@ function setUpMuteButton(musicAudio) {
 async function init() {
   const devTools = createDevTools();
 
-  const [terrainData, routeData, landcoverData] = await Promise.all([
+  const [terrainData, routeData, landcoverData, pathsData] = await Promise.all([
     loadTerrainData(),
     loadRouteData(),
     loadLandcoverData(),
+    loadPathsData(),
   ]);
-  renderCredits(terrainData, routeData, landcoverData);
+  renderCredits(terrainData, routeData, landcoverData, pathsData);
 
   const spawnPoint = routePointToWorld(routeData.points[0]);
   const locationEl = document.getElementById('location');
@@ -99,6 +101,7 @@ async function init() {
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const terrain = createTerrain(terrainData, landcoverData, maxAnisotropy);
   scene.add(terrain.mesh);
+  scene.add(buildPathsOverlay(pathsData, terrain));
   scene.add(buildRouteOverlay(routeData, terrain));
   scene.add(buildScenery(routeData, terrain));
 
