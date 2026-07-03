@@ -26,9 +26,16 @@ export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+// Ground textures are viewed at shallow, near-horizontal angles from this game's chase
+// camera, where trilinear filtering alone blurs noticeably — anisotropic filtering keeps
+// them sharp. `maxAnisotropy` should be `renderer.capabilities.getMaxAnisotropy()`.
+export function applyMaxAnisotropy(texture, maxAnisotropy) {
+  texture.anisotropy = maxAnisotropy;
+}
+
 // A mottled green/brown placeholder standing in for a real ground texture until one is
 // dropped in at GROUND_TEXTURE_URL — generated in-browser so it needs no asset file.
-function createPlaceholderGroundTexture() {
+function createPlaceholderGroundTexture(maxAnisotropy) {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -47,18 +54,20 @@ function createPlaceholderGroundTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  applyMaxAnisotropy(texture, maxAnisotropy);
   return texture;
 }
 
 // Swaps in a real ground texture if one exists at GROUND_TEXTURE_URL — silently keeps
 // the procedural placeholder material if not (dev/CI default).
-function loadRealGroundTexture(material) {
+function loadRealGroundTexture(material, maxAnisotropy) {
   textureLoader.load(
     GROUND_TEXTURE_URL,
     (texture) => {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.colorSpace = THREE.SRGBColorSpace;
+      applyMaxAnisotropy(texture, maxAnisotropy);
       material.map = texture;
       material.needsUpdate = true;
     },
@@ -72,7 +81,14 @@ function loadRealGroundTexture(material) {
 // this exact axis mapping is deliberately mirrored by the CANNON.Heightfield body built
 // in setupWorld.js (see the comment there) so the visual mesh and physics collider stay
 // pixel-aligned from the same `heights` array.
-export function buildTerrainMesh(terrainData, landcoverData = null) {
+//
+// No THREE.LOD here: the production grid (108x248, ~54K tris) is trivial for any modern
+// GPU, and LOD keyed on distance-to-object doesn't suit a single mesh the camera always
+// rides on top of — the bike (and camera) can be anywhere across this ~1.6km x 3.7km grid,
+// so distance to one anchor point isn't a useful proxy for which part needs detail. A
+// correct fix would chunk the terrain into many tiled meshes, each with its own LOD levels
+// — a materially bigger change than issue #71's LOD proposal implies, and left undone here.
+export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotropy = 1) {
   const { cols, rows, cellSize, heights } = terrainData;
 
   if (landcoverData && (landcoverData.cols !== cols || landcoverData.rows !== rows)) {
@@ -127,10 +143,10 @@ export function buildTerrainMesh(terrainData, landcoverData = null) {
   geometry.computeVertexNormals();
 
   const material = new THREE.MeshStandardMaterial({
-    map: createPlaceholderGroundTexture(),
+    map: createPlaceholderGroundTexture(maxAnisotropy),
     vertexColors: Boolean(colors),
   });
-  loadRealGroundTexture(material);
+  loadRealGroundTexture(material, maxAnisotropy);
   return new THREE.Mesh(geometry, material);
 }
 
@@ -161,9 +177,9 @@ export function createHeightLookup(terrainData) {
   };
 }
 
-export function createTerrain(terrainData, landcoverData) {
+export function createTerrain(terrainData, landcoverData, maxAnisotropy) {
   return {
-    mesh: buildTerrainMesh(terrainData, landcoverData),
+    mesh: buildTerrainMesh(terrainData, landcoverData, maxAnisotropy),
     getHeightAt: createHeightLookup(terrainData),
     data: terrainData,
   };

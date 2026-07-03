@@ -95,9 +95,9 @@ async function init() {
   updateLocation(locationEl, terrainData, routeData, spawnPoint.x, spawnPoint.z);
   const miniMap = createMiniMap(terrainData, routeData);
 
-  const terrain = createTerrain(terrainData, landcoverData);
-
   const { scene, camera, renderer, isNight } = setupScene();
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  const terrain = createTerrain(terrainData, landcoverData, maxAnisotropy);
   scene.add(terrain.mesh);
   scene.add(buildRouteOverlay(routeData, terrain));
   scene.add(buildScenery(routeData, terrain));

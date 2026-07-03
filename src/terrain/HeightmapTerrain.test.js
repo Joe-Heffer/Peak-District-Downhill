@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clamp, createHeightLookup } from './HeightmapTerrain.js';
+import { applyMaxAnisotropy, clamp, createHeightLookup } from './HeightmapTerrain.js';
 
 const terrainData = {
   cols: 3,
@@ -23,6 +23,14 @@ describe('clamp', () => {
 
   it('clamps values above the maximum', () => {
     expect(clamp(11, 0, 10)).toBe(10);
+  });
+});
+
+describe('applyMaxAnisotropy', () => {
+  it('sets the texture anisotropy to the given value', () => {
+    const texture = { anisotropy: 1 };
+    applyMaxAnisotropy(texture, 16);
+    expect(texture.anisotropy).toBe(16);
   });
 });
 
