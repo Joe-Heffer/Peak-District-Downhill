@@ -24,8 +24,9 @@ machines and CI runners; install via your package manager if missing).
 
 `.github/workflows/itch-deploy.yml` builds with `npm run build:itch` and pushes `dist-itch/`
 straight to the `gravity-and-grit` project on itch.io using
-[butler](https://itch.io/docs/butler/) (via the
-[`manleydev/butler-publish-itchio-action`](https://github.com/manleydev/butler-publish-itchio-action))
+[butler](https://itch.io/docs/butler/) (installed via the officially-documented
+[`remarkablegames/setup-butler`](https://github.com/marketplace/actions/setup-butler)
+action, then run directly as `butler push`)
 on every push to `main`, or on demand via `workflow_dispatch`. It pushes to the `html5`
 channel; butler creates that channel automatically on its first push if it doesn't exist yet,
 including the *first upload ever* for the project. What it does **not** do is set the embed

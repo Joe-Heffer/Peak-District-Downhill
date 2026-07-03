@@ -93,6 +93,9 @@ change one side's indexing/rotation without updating the other to match.
   `main`.
 - `.github/workflows/deploy.yml` — builds and deploys `dist/` to GitHub Pages on push
   to `main`, or on manual `workflow_dispatch`.
+- `.github/workflows/itch-deploy.yml` — builds with `npm run build:itch` and publishes
+  `dist-itch/` to itch.io via `butler` (see `docs/itch-io.md`) on push to `main`, or on
+  manual `workflow_dispatch`.
 - `.github/workflows/release-please.yml` — maintains a release PR and cuts GitHub
   Releases from Conventional Commits on `main` (config: `release-please-config.json`,
   `.release-please-manifest.json`).
