@@ -256,6 +256,26 @@ describe('BikeController stamina', () => {
     expect(steadyBike.speed).toBeLessThan(burstBike.speed);
   });
 
+  it('keeps climbing a realistic steep grade at the steady rate once stamina is empty (low-gear regression)', () => {
+    // Real bikes have low ("granny") gearing precisely so a rider can keep grinding up a
+    // steep grade forever once winded, just slowly — pedalling should never fully stall
+    // out on Cut Gate's real climbs (up to ~19% grade) just because stamina ran out.
+    const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z };
+    const bike = createBike();
+    bike.terrain = steepUphillTerrain;
+    bike.stamina = 0;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const dt = 1 / 60;
+
+    let previousSpeed = bike.speed;
+    for (let i = 0; i < 60; i += 1) {
+      bike.applyInput(dt, input);
+      expect(bike.speed).toBeGreaterThan(previousSpeed);
+      expect(bike.stamina).toBe(0); // steady rate must not need any stamina to keep working
+      previousSpeed = bike.speed;
+    }
+  });
+
   it('keeps stamina pinned at 0 while holding pedal at the steady rate, and only regenerates once released', () => {
     const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
     const bike = createBike();
