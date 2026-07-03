@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.2.0...peak-district-downhill-v0.3.0) (2026-07-03)
+
+
+### Features
+
+* add CI workflow to deploy builds to itch.io ([#114](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/114)) ([f1b91c0](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/f1b91c0fb52179f6255970d1f1025c86d11ff03d))
+* add in-game feedback button with prefilled GitHub issue link ([#112](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/112)) ([794d66e](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/794d66e9f4108e5ee26dce697b9ca04189ac8619)), closes [#107](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/107)
+* add itch.io build target and publish docs ([#113](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/113)) ([d531add](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/d531add50ace16ffd533a9fed95c8ffe8a255ece)), closes [#108](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/108)
+* add Open Graph/Twitter link-preview metadata and app icons ([#111](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/111)) ([b993fee](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/b993feead6f490a8010c9d000e0962c680b4d898))
+* float route line above terrain and restyle as OS-bridleway green dashes ([#106](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/106)) ([95d8f57](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/95d8f57de1b6bae6a9884f5b0a5d93eaf5e2cd69))
+* render surrounding roads, bridleways and footpaths ([#76](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/76)) ([#99](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/99)) ([5e2e0e3](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/5e2e0e33749f571635f88ffe805d9663668c5474))
+
+
+### Bug Fixes
+
+* pin itch.io publish action to v1.2.0 ([#118](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/118)) ([7b93575](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/7b935753201fa71c9fa1f287c06fece3e370d887)), closes [#117](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/117)
+* retry GitHub Pages deploy on transient failure ([#102](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/102)) ([926ac3f](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/926ac3f025185439790b6bd3dcb132e691545e97))
+* slow stamina drain and add a steady pedal rate once it's empty ([#97](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/97)) ([efa00ea](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/efa00ea6ad04b09ec658ecf703db011d3da35a6b))
+* split three.js and cannon-es into separate vendor chunks ([#116](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/116)) ([33f6077](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/33f607764052e3f35674362d701e62975b482192)), closes [#115](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/115)
+* stop cancelling in-progress Pages deployments ([#100](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/100)) ([e796553](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/e796553da6de89a9b32eaf6a1d44f8d9902ddc33))
+* strengthen pedal acceleration so uphill sections are climbable ([#94](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/94)) ([95b0696](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/95b06966d353e44f770000cb1ebdec9954d9ca50))
+* strengthen steady pedal rate so low gearing can sustain steep climbs ([#98](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/98)) ([d3ed685](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/d3ed685253a385dc988c3f511c786538d1735fdb))
+* use itch.io's official setup-butler action instead of a third-party publish action ([#119](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/119)) ([75d91f6](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/75d91f641edeecbf1c697031e1a52f2bf5a79cdb))
+
 ## [0.2.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.1.0...peak-district-downhill-v0.2.0) (2026-07-03)
 
 
