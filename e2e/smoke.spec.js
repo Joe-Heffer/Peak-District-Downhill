@@ -85,6 +85,48 @@ test('mute button toggles aria-pressed', async ({ page }) => {
   await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('feedback button opens a prefilled GitHub issue in a new tab', async ({ page, context }) => {
+  // A leading slash would resolve against the server root, discarding the GitHub Pages
+  // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
+  await page.goto('./');
+
+  // Intercept and abort the outbound request instead of letting it hit the real
+  // github.com — the button's job is producing the right URL, not GitHub loading it,
+  // and a live external request would make CI depend on GitHub's availability.
+  let requestedUrl = null;
+  let resolveRequestSeen;
+  const requestSeen = new Promise((resolve) => {
+    resolveRequestSeen = resolve;
+  });
+  await context.route('https://github.com/**', (route) => {
+    requestedUrl = route.request().url();
+    resolveRequestSeen();
+    route.abort();
+  });
+
+  const feedbackButton = page.locator('#feedback-btn');
+  await expect(feedbackButton).toBeVisible();
+
+  // The button element is present from index.html immediately, but its click listener is
+  // only wired up once init()'s audio buffers finish decoding — retry the click rather
+  // than guessing a fixed delay (same reasoning as the mute button test above).
+  await expect(async () => {
+    await feedbackButton.click();
+    await Promise.race([
+      requestSeen,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('no request yet')), 500)),
+    ]);
+  }).toPass({ timeout: 10_000 });
+
+  const popupUrl = new URL(requestedUrl);
+  expect(popupUrl.origin + popupUrl.pathname).toBe(
+    'https://github.com/joe-heffer/Peak-District-Downhill/issues/new',
+  );
+  expect(popupUrl.searchParams.get('title')).toBe('Player feedback');
+  expect(popupUrl.searchParams.get('labels')).toBe('player-feedback');
+  expect(popupUrl.searchParams.get('body')).toContain('What happened?');
+});
+
 test('devtools panel toggles with the backtick key', async ({ page }) => {
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
