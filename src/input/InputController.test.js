@@ -49,17 +49,13 @@ describe('createInputController keyboard bindings', () => {
     expect(state.steerRight).toBe(false);
   });
 
-  it('sets jump true on Space/ArrowUp keydown, and keyup does not reset it', () => {
+  it('sets jump true on Space keydown, and keyup does not reset it', () => {
     const state = createInputController();
 
     dispatchKey('keydown', 'Space');
     expect(state.jump).toBe(true);
     dispatchKey('keyup', 'Space');
     // Only applyInput()'s consumption resets jump — a keyup is a no-op for it.
-    expect(state.jump).toBe(true);
-
-    state.jump = false;
-    dispatchKey('keydown', 'ArrowUp');
     expect(state.jump).toBe(true);
   });
 
@@ -77,12 +73,17 @@ describe('createInputController keyboard bindings', () => {
     expect(state.brake).toBe(false);
   });
 
-  it('sets and clears pedal on KeyW keydown/keyup', () => {
+  it('sets and clears pedal on KeyW/ArrowUp keydown/keyup', () => {
     const state = createInputController();
 
     dispatchKey('keydown', 'KeyW');
     expect(state.pedal).toBe(true);
     dispatchKey('keyup', 'KeyW');
+    expect(state.pedal).toBe(false);
+
+    dispatchKey('keydown', 'ArrowUp');
+    expect(state.pedal).toBe(true);
+    dispatchKey('keyup', 'ArrowUp');
     expect(state.pedal).toBe(false);
   });
 });

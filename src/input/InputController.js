@@ -27,10 +27,10 @@ export function createInputController() {
         state.brake = pressed;
         break;
       case 'KeyW':
+      case 'ArrowUp':
         state.pedal = pressed;
         break;
       case 'Space':
-      case 'ArrowUp':
         if (pressed) state.jump = true;
         break;
       default:

@@ -25,9 +25,9 @@ issue](https://github.com/Joe-Heffer/Peak-District-Downhill/issues)).
 | --- | --- | --- |
 | Steer left | `←` / `A` | Left zone |
 | Steer right | `→` / `D` | Right zone |
-| Pedal | `W` | Pedal button |
+| Pedal | `W` / `↑` | Pedal button |
 | Brake | `↓` / `S` | Brake button |
-| Jump | `Space` / `↑` | Jump button |
+| Jump | `Space` | Jump button |
 
 Pedalling draws down a stamina bar (shown top-left); once it's empty the bike
 settles into a slower, sustainable pedal rate until stamina recovers.
