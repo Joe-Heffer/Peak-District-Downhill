@@ -27,6 +27,8 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   expect(box.width).toBeGreaterThan(0);
   expect(box.height).toBeGreaterThan(0);
 
+  await expect(page.locator('#minimap')).toBeVisible();
+
   // The credits text depends on whether any of the three baked datasets are still the
   // synthetic placeholder — fetch them directly and derive the expected branch instead of
   // hardcoding one, so this stays correct whichever data is currently committed.
