@@ -1,16 +1,31 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clamp } from '../terrain/HeightmapTerrain.js';
 
 const RADIUS = 0.5;
 const SPAWN_CLEARANCE = RADIUS + 0.05;
-const FORWARD_SPEED = 6;
 const TURN_RATE = 2.2;
-const JUMP_IMPULSE = 35;
 const GROUNDED_EPSILON = 0.05;
 const HARD_LANDING_VELOCITY = -8;
 const CAMERA_OFFSET = new THREE.Vector3(0, 3, -6);
 const CAMERA_LERP = 0.1;
+
+// Real-world-scale longitudinal dynamics: forward speed is a scalar driven each frame
+// by the slope sampled from the terrain (gravity along the grade), rolling resistance,
+// aerodynamic drag, and braking — not a fixed constant. See CLAUDE.md/plan notes for
+// the sourcing of these figures.
+const BIKE_MASS = 85; // kg — ~15kg trail/enduro bike + ~70kg rider
+const GRAVITY_MAG = 9.82; // m/s^2 — matches world gravity in setupWorld.js
+const ROLLING_RESISTANCE_COEFF = 0.025; // Crr — knobby MTB tyres on dirt/gravel
+const AIR_DENSITY = 1.225; // kg/m^3 — standard sea-level air density
+const DRAG_CDA = 0.6; // m^2 — crouched downhill riding position
+const GRIP_MU = 0.8; // reuses setupWorld.js's ground/bike contact friction
+const BRAKE_MU = 0.5; // controlled-braking traction, below GRIP_MU (loose dirt, no lockup)
+const SLOPE_SAMPLE_DISTANCE = 1.0; // m — forward look-ahead for slope sampling
+const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TURN_RATE
+const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
+const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
 
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are
@@ -53,6 +68,7 @@ export class BikeController {
     this.camera = camera;
     this.terrain = terrain;
     this.yaw = 0;
+    this.speed = 0;
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
@@ -64,7 +80,7 @@ export class BikeController {
 
     const spawnY = terrain.getHeightAt(spawnPoint.x, spawnPoint.z) + SPAWN_CLEARANCE;
     this.body = new CANNON.Body({
-      mass: 5,
+      mass: BIKE_MASS,
       shape: new CANNON.Sphere(RADIUS),
       position: new CANNON.Vec3(spawnPoint.x, spawnY, spawnPoint.z),
       linearDamping: 0.05,
@@ -97,17 +113,46 @@ export class BikeController {
   }
 
   applyInput(dt, inputState) {
-    if (inputState.steerLeft) this.yaw += TURN_RATE * dt;
-    if (inputState.steerRight) this.yaw -= TURN_RATE * dt;
+    // Sharper turns are only possible at low speed — the cap below derives the same
+    // way a real bike's cornering does: lateral (centripetal) acceleration v*omega
+    // can't exceed the available tyre grip (mu*g), so the faster you're going the
+    // less you can yank the bars before you'd wash out.
+    const turnCap =
+      this.speed < TURN_RATE_MIN_SPEED
+        ? TURN_RATE
+        : Math.min(TURN_RATE, (GRIP_MU * GRAVITY_MAG) / this.speed);
+    if (inputState.steerLeft) this.yaw += turnCap * dt;
+    if (inputState.steerRight) this.yaw -= turnCap * dt;
 
     const forward = new CANNON.Vec3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    this.body.velocity.x = forward.x * FORWARD_SPEED;
-    this.body.velocity.z = forward.z * FORWARD_SPEED;
+
+    const groundHere = this.terrain.getHeightAt(this.body.position.x, this.body.position.z);
+    const groundAhead = this.terrain.getHeightAt(
+      this.body.position.x + forward.x * SLOPE_SAMPLE_DISTANCE,
+      this.body.position.z + forward.z * SLOPE_SAMPLE_DISTANCE,
+    );
+    const drop = groundHere - groundAhead; // positive when descending
+    const slopeLength = Math.hypot(drop, SLOPE_SAMPLE_DISTANCE);
+    const sinSlope = drop / slopeLength;
+    const cosSlope = SLOPE_SAMPLE_DISTANCE / slopeLength;
+
+    const gravityAccel = GRAVITY_MAG * sinSlope;
+    const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
+    const dragAccel = (0.5 * AIR_DENSITY * DRAG_CDA * this.speed * this.speed) / BIKE_MASS;
+    const brakeAccel = inputState.brake ? BRAKE_MU * GRAVITY_MAG * cosSlope : 0;
+    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel;
+    this.speed = clamp(this.speed + netAccel * dt, 0, MAX_SPEED);
+
+    this.body.velocity.x = forward.x * this.speed;
+    this.body.velocity.z = forward.z * this.speed;
     this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.yaw);
 
     let jumped = false;
     if (inputState.jump && this.isGrounded()) {
-      this.body.applyImpulse(new CANNON.Vec3(0, JUMP_IMPULSE, 0), this.body.position);
+      this.body.applyImpulse(
+        new CANNON.Vec3(0, JUMP_LAUNCH_VELOCITY * BIKE_MASS, 0),
+        this.body.position,
+      );
       jumped = true;
     }
     inputState.jump = false;

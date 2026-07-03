@@ -6,6 +6,7 @@ beforeEach(() => {
   document.body.innerHTML = `
     <div id="steer-left"></div>
     <div id="steer-right"></div>
+    <div id="brake-btn"></div>
     <div id="jump-btn"></div>
   `;
 });
@@ -60,6 +61,20 @@ describe('createInputController keyboard bindings', () => {
     dispatchKey('keydown', 'ArrowUp');
     expect(state.jump).toBe(true);
   });
+
+  it('sets and clears brake on ArrowDown/KeyS keydown/keyup', () => {
+    const state = createInputController();
+
+    dispatchKey('keydown', 'ArrowDown');
+    expect(state.brake).toBe(true);
+    dispatchKey('keyup', 'ArrowDown');
+    expect(state.brake).toBe(false);
+
+    dispatchKey('keydown', 'KeyS');
+    expect(state.brake).toBe(true);
+    dispatchKey('keyup', 'KeyS');
+    expect(state.brake).toBe(false);
+  });
 });
 
 describe('createInputController pointer zone bindings', () => {
@@ -88,5 +103,14 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.jump).toBe(true);
     dispatchPointer('jump-btn', 'pointerup');
     expect(state.jump).toBe(true);
+  });
+
+  it('sets and clears brake on brake-btn pointerdown/pointerup', () => {
+    const state = createInputController();
+
+    dispatchPointer('brake-btn', 'pointerdown');
+    expect(state.brake).toBe(true);
+    dispatchPointer('brake-btn', 'pointerup');
+    expect(state.brake).toBe(false);
   });
 });
