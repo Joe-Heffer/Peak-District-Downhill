@@ -11,6 +11,15 @@ const HARD_LANDING_VELOCITY = -8;
 const CAMERA_OFFSET = new THREE.Vector3(0, 3, -6);
 const CAMERA_LERP = 0.1;
 
+// Headlight (see issue #79): mounted near the front/handlebar of the bike, aimed along
+// local +z (the forward axis — see createPlaceholderBikeModel's comment and
+// applyInput's forward vector below), only built when spawned into the night preset.
+const HEADLIGHT_COLOR = 0xfff2cc;
+const HEADLIGHT_INTENSITY = 40;
+const HEADLIGHT_DISTANCE = 40;
+const HEADLIGHT_ANGLE = 0.5;
+const HEADLIGHT_PENUMBRA = 0.4;
+
 // Real-world-scale longitudinal dynamics: forward speed is a scalar driven each frame
 // by the slope sampled from the terrain (gravity along the grade), rolling resistance,
 // aerodynamic drag, and braking — not a fixed constant. See CLAUDE.md/plan notes for
@@ -64,7 +73,7 @@ function createPlaceholderBikeModel() {
 }
 
 export class BikeController {
-  constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial) {
+  constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight = false) {
     this.camera = camera;
     this.terrain = terrain;
     this.yaw = 0;
@@ -76,6 +85,22 @@ export class BikeController {
     this.mesh = new THREE.Group();
     this.mesh.add(createPlaceholderBikeModel());
     scene.add(this.mesh);
+
+    // Day/night is fixed for the whole session (no live day/night cycle), so this is
+    // decided once here rather than exposed as a toggle.
+    if (isNight) {
+      this.headlight = new THREE.SpotLight(
+        HEADLIGHT_COLOR,
+        HEADLIGHT_INTENSITY,
+        HEADLIGHT_DISTANCE,
+        HEADLIGHT_ANGLE,
+        HEADLIGHT_PENUMBRA,
+      );
+      this.headlight.position.set(0, 0.5, 0.5);
+      this.headlight.target.position.set(0, 0, 5);
+      this.mesh.add(this.headlight, this.headlight.target);
+    }
+
     this.loadModel();
 
     const spawnY = terrain.getHeightAt(spawnPoint.x, spawnPoint.z) + SPAWN_CLEARANCE;
@@ -102,6 +127,8 @@ export class BikeController {
       gltf.scene.scale.setScalar(MODEL_SCALE);
       gltf.scene.rotation.y = MODEL_ROTATION_Y;
       this.mesh.add(gltf.scene);
+      // clear() above also removed the headlight (a direct child of this.mesh) — re-add it.
+      if (this.headlight) this.mesh.add(this.headlight, this.headlight.target);
     } catch {
       // No real model at MODEL_URL yet — keep the procedural placeholder.
     }

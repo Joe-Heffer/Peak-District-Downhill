@@ -168,3 +168,25 @@ describe('BikeController.syncAfterStep', () => {
     expect(bike.mesh.quaternion.y).toBeCloseTo(bike.body.quaternion.y);
   });
 });
+
+describe('BikeController headlight (issue #79)', () => {
+  it('adds a headlight + target as children of mesh only when constructed at night', () => {
+    const nightBike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0 }, undefined, true);
+    expect(nightBike.headlight).toBeInstanceOf(THREE.SpotLight);
+    expect(nightBike.mesh.children).toContain(nightBike.headlight);
+    expect(nightBike.mesh.children).toContain(nightBike.headlight.target);
+
+    const dayBike = createBike();
+    expect(dayBike.headlight).toBeUndefined();
+  });
+
+  it('survives a successful model load, which otherwise clears mesh children', async () => {
+    GLTFLoader.prototype.loadAsync.mockResolvedValue({ scene: new THREE.Group() });
+
+    const bike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0 }, undefined, true);
+    await bike.loadModel();
+
+    expect(bike.mesh.children).toContain(bike.headlight);
+    expect(bike.mesh.children).toContain(bike.headlight.target);
+  });
+});

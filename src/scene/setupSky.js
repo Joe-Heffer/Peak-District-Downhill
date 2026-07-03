@@ -50,7 +50,29 @@ export const SKY_PRESETS = {
     fogColor: 0x9aa0c0, fogNear: 70, fogFar: 3000,
     toneMappingExposure: 1.1,
   },
+  // sunElevation is pushed well below the horizon purely so the Sky shader's atmosphere
+  // stays dark (the shader brightens sharply once its "sun" is above the horizon,
+  // regardless of turbidity/rayleigh) — moonElevation/moonAzimuth is the separate,
+  // actual light source direction: applySky points dirLight (relabelled as moonlight)
+  // and the visible moon disc at that position instead of at sunElevation/sunAzimuth.
+  // isNight also gates the star field below and the bike headlight (see #79).
+  night: {
+    isNight: true,
+    sunElevation: -15, sunAzimuth: 250,
+    moonElevation: 55, moonAzimuth: 200,
+    turbidity: 2, rayleigh: 0.3, mieCoefficient: 0.003, mieDirectionalG: 0.8,
+    cloudCoverage: 0.15, cloudDensity: 0.2,
+    sunColor: 0x9fb8e8, sunIntensity: 0.6,
+    hemiSkyColor: 0x263757, hemiGroundColor: 0x232a1a, hemiIntensity: 0.55,
+    fogColor: 0x0a0e1c, fogNear: 25, fogFar: 700,
+    toneMappingExposure: 1.3,
+  },
 };
+
+const MOON_DISTANCE = 4000; // inside SKY_SCALE so it renders in front of the sky dome
+const MOON_RADIUS = 180;
+const STAR_COUNT = 2500;
+const STAR_FIELD_RADIUS = 5000;
 
 // `?sky=dusk` etc. overrides the random pick — handy for manually eyeballing one preset.
 function pickPresetName() {
@@ -67,11 +89,56 @@ function getSunDirection(elevationDeg, azimuthDeg) {
   return new THREE.Vector3().setFromSphericalCoords(1, phi, theta);
 }
 
+// Both the moon and star field re-centre on the camera every frame via onBeforeRender,
+// the same trick the sky dome above uses, so they stay "infinitely far" as the camera
+// roams kilometres of terrain rather than needing a hook in main.js's tick loop.
+function createMoon(preset) {
+  const direction = getSunDirection(preset.moonElevation, preset.moonAzimuth);
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(MOON_RADIUS, 24, 16),
+    new THREE.MeshBasicMaterial({ color: 0xf5f3e7, fog: false }),
+  );
+  moon.onBeforeRender = (renderer, scene, camera) => {
+    moon.position.copy(camera.position).addScaledVector(direction, MOON_DISTANCE);
+  };
+  return moon;
+}
+
+function createStars() {
+  const positions = new Float32Array(STAR_COUNT * 3);
+  for (let i = 0; i < STAR_COUNT; i += 1) {
+    // acos(2u - 1) distributes polar angle evenly over the sphere's surface area,
+    // avoiding the pole-clustering a naive random phi/theta pair would produce.
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3] = STAR_FIELD_RADIUS * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = STAR_FIELD_RADIUS * Math.cos(phi);
+    positions[i * 3 + 2] = STAR_FIELD_RADIUS * Math.sin(phi) * Math.sin(theta);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const stars = new THREE.Points(
+    geometry,
+    new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true, fog: false }),
+  );
+  stars.onBeforeRender = (renderer, scene, camera) => {
+    stars.position.copy(camera.position);
+  };
+  return stars;
+}
+
 // Builds the sky dome and points the scene's existing sun/hemisphere lights, fog and
 // renderer tone mapping at one randomly (or ?sky=-) chosen preset.
 export function applySky({ scene, camera, renderer, dirLight, hemiLight }) {
   const preset = SKY_PRESETS[pickPresetName()];
-  const sunDirection = getSunDirection(preset.sunElevation, preset.sunAzimuth);
+  const skyDirection = getSunDirection(preset.sunElevation, preset.sunAzimuth);
+  // At night the dirLight/moon disc are driven by moonElevation/moonAzimuth instead of
+  // the Sky shader's (deliberately sub-horizon) sunElevation/sunAzimuth — see the `night`
+  // preset comment above.
+  const lightDirection = preset.isNight
+    ? getSunDirection(preset.moonElevation, preset.moonAzimuth)
+    : skyDirection;
 
   const sky = new Sky();
   sky.scale.setScalar(SKY_SCALE);
@@ -83,7 +150,7 @@ export function applySky({ scene, camera, renderer, dirLight, hemiLight }) {
   uniforms.mieDirectionalG.value = preset.mieDirectionalG;
   uniforms.cloudCoverage.value = preset.cloudCoverage;
   uniforms.cloudDensity.value = preset.cloudDensity;
-  uniforms.sunPosition.value.copy(sunDirection);
+  uniforms.sunPosition.value.copy(skyDirection);
 
   const clock = new THREE.Clock();
   sky.onBeforeRender = () => {
@@ -93,7 +160,7 @@ export function applySky({ scene, camera, renderer, dirLight, hemiLight }) {
   };
   scene.add(sky);
 
-  dirLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE);
+  dirLight.position.copy(lightDirection).multiplyScalar(SUN_DISTANCE);
   dirLight.color.set(preset.sunColor);
   dirLight.intensity = preset.sunIntensity;
 
@@ -105,4 +172,11 @@ export function applySky({ scene, camera, renderer, dirLight, hemiLight }) {
 
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = preset.toneMappingExposure;
+
+  if (preset.isNight) {
+    scene.add(createMoon(preset));
+    scene.add(createStars());
+  }
+
+  return { isNight: Boolean(preset.isNight) };
 }
