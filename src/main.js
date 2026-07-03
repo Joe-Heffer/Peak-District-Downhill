@@ -7,6 +7,7 @@ import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
+import { buildScenery } from './scenery/Scenery.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
@@ -95,6 +96,7 @@ async function init() {
   const { scene, camera, renderer } = setupScene();
   scene.add(terrain.mesh);
   scene.add(buildRouteOverlay(routeData, terrain));
+  scene.add(buildScenery(routeData, terrain));
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial);
