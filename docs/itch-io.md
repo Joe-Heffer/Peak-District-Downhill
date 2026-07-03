@@ -20,6 +20,33 @@ npm run package:itch   # build:itch, then zip dist-itch/ into peak-district-down
 `npm run package:itch` requires the `zip` command-line tool (already present on most dev
 machines and CI runners; install via your package manager if missing).
 
+## Automated deploy (CI)
+
+`.github/workflows/itch-deploy.yml` builds with `npm run build:itch` and pushes `dist-itch/`
+straight to the `gravity-and-grit` project on itch.io using
+[butler](https://itch.io/docs/butler/) (via the
+[`manleydev/butler-publish-itchio-action`](https://github.com/manleydev/butler-publish-itchio-action))
+on every push to `main`, or on demand via `workflow_dispatch`. It pushes to the `html5`
+channel; butler creates that channel automatically on its first push if it doesn't exist yet,
+including the *first upload ever* for the project. What it does **not** do is set the embed
+viewport, "Fullscreen button", or "Mobile friendly" options — after the first CI push, go to
+the [itch.io dashboard](https://joe-heffer.itch.io/gravity-and-grit) → **Edit game** →
+**Uploads**, confirm the `html5` channel's upload has **"This file will be played in the
+browser"** ticked (butler-created HTML5 channels normally get this automatically, but verify),
+and set the viewport/fullscreen/mobile options described in the manual steps below. That's a
+one-time step; subsequent CI pushes just update the same channel's content.
+
+This workflow needs a `BUTLER_API_KEY` repository secret:
+
+1. Run `npx butler login` locally (or see the [butler docs](https://itch.io/docs/butler/login.html))
+   to get an API key, or generate one directly at
+   [itch.io/user/settings/api-keys](https://itch.io/user/settings/api-keys).
+2. In the GitHub repo, go to **Settings → Secrets and variables → Actions** and add a
+   repository secret named `BUTLER_API_KEY` with that value.
+
+Without the secret set, the workflow's publish step will fail — the build/package steps
+still run, so CI failures there are unrelated to itch.io credentials.
+
 ## Uploading (manual, one-off or per-release)
 
 1. Run `npm run package:itch`.
