@@ -49,7 +49,14 @@ const STAMINA_DRAIN_RATE = 1 / 6; // per second — full tank drains in ~6s of c
 const STAMINA_REGEN_RATE = 1 / 10; // per second while coasting — full regen in ~10s
 const STAMINA_REGEN_RATE_RESTING = 1 / 5; // per second while braking/near-stationary — faster
 const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting" for regen
-const PEDAL_ACCEL = 1.2; // m/s^2 — rider effort acceleration while pedalling with stamina left
+// m/s^2 — rider effort acceleration while pedalling with stamina left. Must comfortably
+// clear GRAVITY_MAG * sinSlope + rolling resistance on real uphill grades, or pedalling
+// does nothing on a climb no matter how long it's held. Cut Gate's real route (see
+// public/data/routes/cutgate.json sampled against public/data/terrain/cutgate.json) has
+// uphill segments up to ~19% grade; 3.0 clears that with margin (theoretical stall grade
+// ~28-29%), whereas the previous 1.2 stalled out above ~10.7% grade — most of the route's
+// climbs (issue: "pedal mode ... can't go uphill").
+const PEDAL_ACCEL = 3.0;
 
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are

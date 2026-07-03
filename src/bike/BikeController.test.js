@@ -88,6 +88,32 @@ describe('BikeController.applyInput', () => {
     }
   });
 
+  it('climbs a steep uphill grade while pedalling (regression: Cut Gate\'s real route has climbs up to ~19% grade)', () => {
+    const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z }; // ~19% ascending grade in +z
+    const bike = createBike();
+    bike.terrain = steepUphillTerrain;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const dt = 1 / 60;
+
+    let previousSpeed = bike.speed;
+    for (let i = 0; i < 15; i += 1) {
+      bike.applyInput(dt, input);
+      expect(bike.speed).toBeGreaterThan(previousSpeed);
+      previousSpeed = bike.speed;
+    }
+  });
+
+  it('still stalls on an unrealistically extreme grade even while pedalling', () => {
+    const extremeUphillTerrain = { getHeightAt: (x, z) => 0.4 * z }; // 40% ascending grade in +z
+    const bike = createBike();
+    bike.terrain = extremeUphillTerrain;
+    bike.speed = 2;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+
+    bike.applyInput(1 / 60, input);
+    expect(bike.speed).toBeLessThan(2);
+  });
+
   it('decelerates on flat ground from rolling resistance and drag alone', () => {
     const bike = createBike();
     bike.speed = 8;
