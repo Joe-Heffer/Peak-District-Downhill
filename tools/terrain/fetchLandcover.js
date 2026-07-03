@@ -29,7 +29,7 @@ import {
   LANDCOVER_OUT,
   ATTRIBUTION,
 } from './config.js';
-import { wgs84ToLocalBng, bngToWgs84 } from './projection.js';
+import { wgs84ToLocalBng, wgs84BboxOf } from './projection.js';
 
 export const LANDCOVER_CLASSES = ['grass', 'wood', 'rock', 'heather', 'track'];
 
@@ -48,23 +48,6 @@ function trackBufferFor(cellSize) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
-}
-
-// Local WGS84 bbox of BNG_BBOX, expanded across all 4 corners (not just two opposite
-// ones) since transverse-Mercator reprojection isn't axis-aligned.
-function wgs84BboxOf(bngBbox) {
-  const corners = [
-    bngToWgs84(bngBbox.minE, bngBbox.minN),
-    bngToWgs84(bngBbox.maxE, bngBbox.minN),
-    bngToWgs84(bngBbox.maxE, bngBbox.maxN),
-    bngToWgs84(bngBbox.minE, bngBbox.maxN),
-  ];
-  return {
-    south: Math.min(...corners.map((c) => c.lat)),
-    north: Math.max(...corners.map((c) => c.lat)),
-    west: Math.min(...corners.map((c) => c.lon)),
-    east: Math.max(...corners.map((c) => c.lon)),
-  };
 }
 
 async function fetchLandcoverWays(bbox) {

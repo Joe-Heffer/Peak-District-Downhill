@@ -14,7 +14,9 @@ import {
   TERRAIN_OUT,
   ROUTE_OUT,
   LANDCOVER_OUT,
+  PATHS_OUT,
 } from './config.js';
+import { PATH_CATEGORIES } from './pathClassification.js';
 
 const LANDCOVER_CLASSES = ['grass', 'wood', 'rock', 'heather', 'track'];
 
@@ -100,6 +102,35 @@ const routeData = {
   points: routePoints,
 };
 
+// One short synthetic branch per path category, forking off fixed points along the
+// placeholder route — deterministic (no Math.random()), just enough to exercise
+// src/routes/PathsOverlay.js's per-category rendering without needing network access.
+function branchFrom(routeIndex, dirE, dirN, length, steps) {
+  const origin = routePoints[routeIndex];
+  const points = [origin];
+  for (let s = 1; s <= steps; s += 1) {
+    const t = (s / steps) * length;
+    points.push({ e: origin.e + dirE * t, n: origin.n + dirN * t });
+  }
+  return points;
+}
+
+const pathBranchLength = Math.min(bboxWidth, bboxHeight) * 0.15;
+
+const pathsData = {
+  placeholder: true,
+  crs: 'EPSG:27700',
+  origin: LOCAL_ORIGIN,
+  categories: PATH_CATEGORIES,
+  source: PLACEHOLDER_NOTICE,
+  license: PLACEHOLDER_NOTICE,
+  paths: [
+    { category: 'footpath', wayId: null, points: branchFrom(10, 1, 0.4, pathBranchLength, 6) },
+    { category: 'bridleway', wayId: null, points: branchFrom(20, -1, 0.3, pathBranchLength, 6) },
+    { category: 'road', wayId: null, points: branchFrom(30, 1, -0.2, pathBranchLength, 6) },
+  ],
+};
+
 // Synthetic landcover, deterministic (sin/cos-based, no Math.random()) like the
 // elevation/route shaping above — a few fixed patches standing in for real OSM-derived
 // classification so the landcover-tinted terrain feature is visible without network
@@ -183,10 +214,13 @@ const landcoverData = {
 
 mkdirSync(dirname(fileURLToPath(TERRAIN_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(ROUTE_OUT)), { recursive: true });
+mkdirSync(dirname(fileURLToPath(PATHS_OUT)), { recursive: true });
 writeFileSync(TERRAIN_OUT, JSON.stringify(terrainData));
 writeFileSync(ROUTE_OUT, JSON.stringify(routeData));
 writeFileSync(LANDCOVER_OUT, JSON.stringify(landcoverData));
+writeFileSync(PATHS_OUT, JSON.stringify(pathsData));
 
 console.log(`Wrote placeholder terrain (${cols}x${rows} @ ${cellSize}m) and route (${routePoints.length} points).`);
 console.log('Landcover class histogram:', landcoverHistogram);
+console.log(`Wrote placeholder paths (${pathsData.paths.length} segments).`);
 console.log('Reminder: this is synthetic placeholder data, not real Cut Gate topology.');

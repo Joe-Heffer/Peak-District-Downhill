@@ -39,6 +39,7 @@ export const RAW_DIR = new URL('./raw/', import.meta.url);
 export const TERRAIN_OUT = new URL('../../public/data/terrain/cutgate.json', import.meta.url);
 export const ROUTE_OUT = new URL('../../public/data/routes/cutgate.json', import.meta.url);
 export const LANDCOVER_OUT = new URL('../../public/data/terrain/cutgate-landcover.json', import.meta.url);
+export const PATHS_OUT = new URL('../../public/data/routes/cutgate-paths.json', import.meta.url);
 
 export const ATTRIBUTION = {
   terrain:
