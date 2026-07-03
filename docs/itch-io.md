@@ -39,9 +39,13 @@ one-time step; subsequent CI pushes just update the same channel's content.
 
 This workflow needs a `BUTLER_API_KEY` repository secret:
 
-1. Run `npx butler login` locally (or see the [butler docs](https://itch.io/docs/butler/login.html))
-   to get an API key, or generate one directly at
-   [itch.io/user/settings/api-keys](https://itch.io/user/settings/api-keys).
+1. Generate an API key at
+   [itch.io/user/settings/api-keys](https://itch.io/user/settings/api-keys) — simplest, no local
+   butler install needed. Alternatively, [install butler
+   locally](https://itch.io/docs/butler/installing.html) (it's a standalone binary, not an npm
+   package) and run `butler login`, then read the key from your local credentials file
+   (`~/.config/itch/butler_creds` on Linux) or from the same API keys page (look for the key with
+   source `wharf`).
 2. In the GitHub repo, go to **Settings → Secrets and variables → Actions** and add a
    repository secret named `BUTLER_API_KEY` with that value.
 
