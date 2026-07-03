@@ -28,6 +28,7 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   expect(box.height).toBeGreaterThan(0);
 
   await expect(page.locator('#minimap')).toBeVisible();
+  await expect(page.locator('#stamina-bar-fill')).toHaveCSS('width', '140px'); // full stamina at spawn
 
   // The credits text depends on whether any of the three baked datasets are still the
   // synthetic placeholder — fetch them directly and derive the expected branch instead of

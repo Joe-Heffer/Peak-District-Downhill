@@ -50,6 +50,26 @@ html, body {
   z-index: 2;
 }
 
+#stamina-bar {
+  position: fixed;
+  top: 56px;
+  left: 8px;
+  width: 140px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(20, 20, 20, 0.35);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#stamina-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: #6cc24a;
+  transition: width 0.1s linear;
+}
+
 #minimap {
   position: fixed;
   top: 52px;
@@ -140,4 +160,15 @@ html, body {
 
 .control-zone--brake:active {
   background: rgba(200, 150, 20, 0.8);
+}
+
+.control-zone--pedal {
+  font-size: 16px;
+  width: 96px;
+  height: 96px;
+  background: rgba(40, 160, 70, 0.55);
+}
+
+.control-zone--pedal:active {
+  background: rgba(40, 160, 70, 0.8);
 }

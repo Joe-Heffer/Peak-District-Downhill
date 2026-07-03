@@ -7,6 +7,7 @@ beforeEach(() => {
     <div id="steer-left"></div>
     <div id="steer-right"></div>
     <div id="brake-btn"></div>
+    <div id="pedal-btn"></div>
     <div id="jump-btn"></div>
   `;
 });
@@ -75,6 +76,15 @@ describe('createInputController keyboard bindings', () => {
     dispatchKey('keyup', 'KeyS');
     expect(state.brake).toBe(false);
   });
+
+  it('sets and clears pedal on KeyW keydown/keyup', () => {
+    const state = createInputController();
+
+    dispatchKey('keydown', 'KeyW');
+    expect(state.pedal).toBe(true);
+    dispatchKey('keyup', 'KeyW');
+    expect(state.pedal).toBe(false);
+  });
 });
 
 describe('createInputController pointer zone bindings', () => {
@@ -112,5 +122,14 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.brake).toBe(true);
     dispatchPointer('brake-btn', 'pointerup');
     expect(state.brake).toBe(false);
+  });
+
+  it('sets and clears pedal on pedal-btn pointerdown/pointerup', () => {
+    const state = createInputController();
+
+    dispatchPointer('pedal-btn', 'pointerdown');
+    expect(state.pedal).toBe(true);
+    dispatchPointer('pedal-btn', 'pointerup');
+    expect(state.pedal).toBe(false);
   });
 });

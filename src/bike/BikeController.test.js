@@ -134,6 +134,80 @@ describe('BikeController.applyInput', () => {
   });
 });
 
+describe('BikeController stamina', () => {
+  it('starts full', () => {
+    const bike = createBike();
+    expect(bike.stamina).toBe(1);
+  });
+
+  it('accelerates on flat ground while pedalling with stamina available', () => {
+    const bike = createBike();
+    bike.speed = 3;
+    bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
+    expect(bike.speed).toBeGreaterThan(3);
+  });
+
+  it('drains while pedalling and regenerates while coasting', () => {
+    const bike = createBike();
+    const pedalInput = {
+      steerLeft: false,
+      steerRight: false,
+      jump: false,
+      brake: false,
+      pedal: true,
+    };
+
+    bike.applyInput(1, pedalInput);
+    expect(bike.stamina).toBeLessThan(1);
+
+    const staminaAfterPedalling = bike.stamina;
+    bike.applyInput(1, { ...pedalInput, pedal: false });
+    expect(bike.stamina).toBeGreaterThan(staminaAfterPedalling);
+  });
+
+  it('does not drain below 0, and pedalling with empty stamina no longer boosts speed', () => {
+    const bike = createBike();
+    bike.stamina = 0;
+    bike.speed = 3;
+
+    bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
+    expect(bike.stamina).toBe(0);
+    expect(bike.speed).toBeLessThan(3); // falls back to plain coast (drag/rolling resistance)
+  });
+
+  it('does not regenerate above MAX_STAMINA', () => {
+    const bike = createBike();
+    bike.applyInput(10, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: false });
+    expect(bike.stamina).toBe(1);
+  });
+
+  it('regenerates faster while braking/near-stationary than while coasting at speed', () => {
+    const coastingBike = createBike();
+    coastingBike.stamina = 0;
+    coastingBike.speed = 10; // above STAMINA_REST_SPEED_THRESHOLD
+    coastingBike.applyInput(1, {
+      steerLeft: false,
+      steerRight: false,
+      jump: false,
+      brake: false,
+      pedal: false,
+    });
+
+    const restingBike = createBike();
+    restingBike.stamina = 0;
+    restingBike.speed = 10;
+    restingBike.applyInput(1, {
+      steerLeft: false,
+      steerRight: false,
+      jump: false,
+      brake: true,
+      pedal: false,
+    });
+
+    expect(restingBike.stamina).toBeGreaterThan(coastingBike.stamina);
+  });
+});
+
 describe('BikeController.syncAfterStep', () => {
   it('flags a hard landing when transitioning from airborne to grounded while falling fast', () => {
     const bike = createBike();
