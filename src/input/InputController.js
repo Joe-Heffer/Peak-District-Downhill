@@ -1,9 +1,10 @@
 export function createInputController() {
-  const state = { steerLeft: false, steerRight: false, jump: false, brake: false };
+  const state = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: false };
 
   bindPointerZone('steer-left', (pressed) => (state.steerLeft = pressed));
   bindPointerZone('steer-right', (pressed) => (state.steerRight = pressed));
   bindPointerZone('brake-btn', (pressed) => (state.brake = pressed));
+  bindPointerZone('pedal-btn', (pressed) => (state.pedal = pressed));
   bindPointerZone('jump-btn', (pressed) => {
     if (pressed) state.jump = true;
   });
@@ -24,6 +25,9 @@ export function createInputController() {
       case 'ArrowDown':
       case 'KeyS':
         state.brake = pressed;
+        break;
+      case 'KeyW':
+        state.pedal = pressed;
         break;
       case 'Space':
       case 'ArrowUp':

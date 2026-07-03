@@ -88,6 +88,7 @@ async function init() {
 
   const spawnPoint = routePointToWorld(routeData.points[0]);
   const locationEl = document.getElementById('location');
+  const staminaFillEl = document.getElementById('stamina-bar-fill');
   updateLocation(locationEl, terrainData, routeData, spawnPoint.x, spawnPoint.z);
   const miniMap = createMiniMap(terrainData, routeData);
 
@@ -127,6 +128,7 @@ async function init() {
     tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
 
     miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
+    if (staminaFillEl) staminaFillEl.style.width = `${bike.stamina * 100}%`;
 
     timeSinceLocationUpdate += dt;
     if (timeSinceLocationUpdate >= LOCATION_UPDATE_INTERVAL) {

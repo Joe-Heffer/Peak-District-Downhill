@@ -36,6 +36,16 @@ const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TU
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
 
+// Pedalling (issue #61): stamina is a unitless 0..1 fraction, not an absolute energy
+// unit. Drain/regen rates are tuned by feel like the drag/rolling-resistance figures
+// above, not derived from real rider physiology.
+const MAX_STAMINA = 1;
+const STAMINA_DRAIN_RATE = 1 / 6; // per second — full tank drains in ~6s of continuous pedalling
+const STAMINA_REGEN_RATE = 1 / 10; // per second while coasting — full regen in ~10s
+const STAMINA_REGEN_RATE_RESTING = 1 / 5; // per second while braking/near-stationary — faster
+const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting" for regen
+const PEDAL_ACCEL = 1.2; // m/s^2 — rider effort acceleration while pedalling with stamina left
+
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are
 // millimeters (e.g. its wheels are ~634mm across), hence the 0.001 scale down to meters.
@@ -78,6 +88,7 @@ export class BikeController {
     this.terrain = terrain;
     this.yaw = 0;
     this.speed = 0;
+    this.stamina = MAX_STAMINA;
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
@@ -167,8 +178,21 @@ export class BikeController {
     const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
     const dragAccel = (0.5 * AIR_DENSITY * DRAG_CDA * this.speed * this.speed) / BIKE_MASS;
     const brakeAccel = inputState.brake ? BRAKE_MU * GRAVITY_MAG * cosSlope : 0;
-    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel;
+    const pedalAccel = inputState.pedal && this.stamina > 0 ? PEDAL_ACCEL : 0;
+    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel + pedalAccel;
     this.speed = clamp(this.speed + netAccel * dt, 0, MAX_SPEED);
+
+    // Keyed on the raw input (not whether stamina was actually available to spend) so
+    // holding pedal at 0 stamina keeps it pinned at 0 instead of immediately regenerating.
+    if (inputState.pedal) {
+      this.stamina = clamp(this.stamina - STAMINA_DRAIN_RATE * dt, 0, MAX_STAMINA);
+    } else {
+      const regenRate =
+        inputState.brake || this.speed < STAMINA_REST_SPEED_THRESHOLD
+          ? STAMINA_REGEN_RATE_RESTING
+          : STAMINA_REGEN_RATE;
+      this.stamina = clamp(this.stamina + regenRate * dt, 0, MAX_STAMINA);
+    }
 
     this.body.velocity.x = forward.x * this.speed;
     this.body.velocity.z = forward.z * this.speed;
