@@ -20,7 +20,16 @@ Play it live at **[joe-heffer.github.io/Peak-District-Downhill](https://joe-heff
 | --- | --- | --- |
 | Steer left | `←` / `A` | Left zone |
 | Steer right | `→` / `D` | Right zone |
+| Pedal | `W` | Pedal button |
+| Brake | `↓` / `S` | Brake button |
 | Jump | `Space` / `↑` | Jump button |
+
+Pedalling draws down a stamina bar (shown top-left); once it's empty the bike
+settles into a slower, sustainable pedal rate until stamina recovers.
+
+Other controls: the speaker icon (top-right) mutes/unmutes the music, and
+`` ` `` (backquote) toggles the dev-tools panel (stats, log console, and admin
+commands).
 
 ## Getting started
 
