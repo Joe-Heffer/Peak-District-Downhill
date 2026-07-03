@@ -11,6 +11,7 @@ import { buildScenery } from './scenery/Scenery.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
+import { createDevTools } from './devtools/DevTools.js';
 
 const TIRE_ROLL_VOLUME = 0.4;
 const MUSIC_VOLUME = 0.25;
@@ -79,6 +80,8 @@ function setUpMuteButton(musicAudio) {
 }
 
 async function init() {
+  const devTools = createDevTools();
+
   const [terrainData, routeData, landcoverData] = await Promise.all([
     loadTerrainData(),
     loadRouteData(),
@@ -101,6 +104,7 @@ async function init() {
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight);
+  devTools.attachGameState({ bike, world, scene, camera, terrain, terrainData, routeData });
   const inputState = createInputController();
 
   window.addEventListener('keydown', resumeAudioOnGesture, { once: true });
@@ -117,27 +121,33 @@ async function init() {
   let timeSinceLocationUpdate = 0;
 
   function tick() {
-    const dt = clock.getDelta();
+    try {
+      const dt = clock.getDelta();
 
-    const jumped = bike.applyInput(dt, inputState);
-    world.step(1 / 60, dt, 10);
-    bike.syncAfterStep();
+      const jumped = bike.applyInput(dt, inputState);
+      world.step(1 / 60, dt, 10);
+      bike.syncAfterStep();
 
-    if (jumped) audioManager.playOnce('jump', 0.6);
-    if (bike.hardLanding) audioManager.playOnce('crash', 0.8);
-    tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
+      if (jumped) audioManager.playOnce('jump', 0.6);
+      if (bike.hardLanding) audioManager.playOnce('crash', 0.8);
+      tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
 
-    miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
-    if (staminaFillEl) staminaFillEl.style.width = `${bike.stamina * 100}%`;
+      miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
+      if (staminaFillEl) staminaFillEl.style.width = `${bike.stamina * 100}%`;
 
-    timeSinceLocationUpdate += dt;
-    if (timeSinceLocationUpdate >= LOCATION_UPDATE_INTERVAL) {
-      timeSinceLocationUpdate = 0;
-      updateLocation(locationEl, terrainData, routeData, bike.mesh.position.x, bike.mesh.position.z);
+      timeSinceLocationUpdate += dt;
+      if (timeSinceLocationUpdate >= LOCATION_UPDATE_INTERVAL) {
+        timeSinceLocationUpdate = 0;
+        updateLocation(locationEl, terrainData, routeData, bike.mesh.position.x, bike.mesh.position.z);
+      }
+
+      devTools.update(dt);
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    } catch (error) {
+      devTools.reportCrash('tick', error, { fatal: true });
     }
-
-    renderer.render(scene, camera);
-    requestAnimationFrame(tick);
   }
 
   tick();

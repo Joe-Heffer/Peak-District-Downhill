@@ -100,6 +100,83 @@ html, body {
   background: rgba(20, 20, 20, 0.6);
 }
 
+#devtools {
+  position: fixed;
+  top: 8px;
+  left: 160px;
+  right: 8px;
+  bottom: 140px;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(20, 20, 20, 0.35);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+/* #devtools sets display:flex above, and an ID selector beats the UA's built-in
+   [hidden] { display: none } rule, so this override is required or the `hidden`
+   attribute silently stops working once the flex rule is added. */
+#devtools[hidden] {
+  display: none;
+}
+
+#devtools-banner {
+  background: rgba(180, 40, 40, 0.6);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+#devtools-stats {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+#devtools-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.devtools-log-entry {
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  word-break: break-word;
+}
+
+.devtools-log-entry--warn {
+  color: #ffd166;
+}
+
+.devtools-log-entry--error,
+.devtools-log-entry--crash {
+  color: #ff6b6b;
+}
+
+.devtools-log-entry--crash {
+  font-weight: bold;
+}
+
+#devtools-cmd-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  color: #fff;
+  font: inherit;
+  padding: 4px 6px;
+}
+
 #controls {
   position: fixed;
   inset: 0;

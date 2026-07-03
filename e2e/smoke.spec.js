@@ -83,3 +83,18 @@ test('mute button toggles aria-pressed', async ({ page }) => {
   await muteButton.click();
   await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
 });
+
+test('devtools panel toggles with the backtick key', async ({ page }) => {
+  // A leading slash would resolve against the server root, discarding the GitHub Pages
+  // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
+  await page.goto('./');
+
+  const panel = page.locator('#devtools');
+  await expect(panel).toBeHidden();
+
+  await page.keyboard.press('Backquote');
+  await expect(panel).toBeVisible();
+
+  await page.keyboard.press('Backquote');
+  await expect(panel).toBeHidden();
+});
