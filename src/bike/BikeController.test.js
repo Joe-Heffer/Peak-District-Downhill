@@ -132,6 +132,36 @@ describe('BikeController.applyInput', () => {
     expect(jumpedWhileAirborne).toBe(false);
     expect(airborneInput.jump).toBe(false);
   });
+
+  it('keeps moving under pedal input after sitting idle long enough to fall asleep (regression)', () => {
+    // Mirrors setupWorld.js's real config: with world.allowSleep on and the default
+    // 1s sleepTimeLimit, a body resting below the speed threshold falls fully
+    // asleep, and cannon-es then ignores velocity writes on it until something
+    // calls wakeUp() — silently freezing the bike in place despite pedal input.
+    const sleepyWorld = new CANNON.World();
+    sleepyWorld.allowSleep = true;
+    const bike = new BikeController(scene, sleepyWorld, camera, terrain, { x: 0, z: 0 });
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 90; i += 1) {
+      sleepyWorld.step(dt); // idle for 1.5s, well past the default 1s sleepTimeLimit
+    }
+
+    const pedalInput = {
+      steerLeft: false,
+      steerRight: false,
+      jump: false,
+      brake: false,
+      pedal: true,
+    };
+    for (let i = 0; i < 30; i += 1) {
+      bike.applyInput(dt, pedalInput);
+      sleepyWorld.step(dt);
+    }
+
+    expect(bike.body.sleepState).not.toBe(CANNON.Body.SLEEPING);
+    expect(bike.body.position.z).toBeGreaterThan(0);
+  });
 });
 
 describe('BikeController stamina', () => {

@@ -121,6 +121,13 @@ export class BikeController {
       position: new CANNON.Vec3(spawnPoint.x, spawnY, spawnPoint.z),
       linearDamping: 0.05,
       material: bikeMaterial,
+      // applyInput() unconditionally rewrites body.velocity every frame from its own
+      // speed/yaw model — it never relies on cannon-es's inertia to settle. Without
+      // this, resting at low speed for >1s (default sleepTimeLimit) puts the body to
+      // sleep, and Body.integrate() then ignores velocity writes on a sleeping body
+      // until something calls wakeUp(), so pedalling from a stop would silently do
+      // nothing to the bike's position even though speed/stamina still updated.
+      allowSleep: false,
     });
     // Heading is fully steering-controlled: applyInput() sets the body's orientation
     // explicitly from `this.yaw` every frame. Locking all rotation axes (rather than
