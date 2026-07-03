@@ -85,7 +85,7 @@ above:
 | Banner | *(needs regenerating)* | Previous crop was sourced from the now-removed stone-carved lockup; replace with a banner built around `logo-mark-transparent.png` instead. Itch's max display width is 960px, height <400px |
 | Background | [`images/itch-io/page-background-1920x1080.png`](images/itch-io/page-background-1920x1080.png) | Cropped/upscaled from `style-anchor-stanage-descent.png` — note it includes a "STANAGE EDGE 1.5 MILES" waymarker; the game currently only models Cut Gate, so treat this purely as generic gritstone-moorland atmosphere, not a claim about in-game locations. Regenerate without the sign if that reads as misleading |
 | Embed background image | [`images/itch-io/embed-background-640x360.png`](images/itch-io/embed-background-640x360.png) | Cropped from `key-art-sessioning-the-tor.png` at very close to itch's native 640×360, so minimal quality loss |
-| Cover image | [`images/itch-io/cover-630x500.png`](images/itch-io/cover-630x500.png) | `style-anchor-bike-jump.png` centre-cropped to 630×500 with the transparent logo composited on top |
+| Cover image | [`images/itch-io/cover-630x500.png`](images/itch-io/cover-630x500.png) | `style-anchor-bike-jump.png` cropped top-biased (full width, top 812 of 1024px height kept) to hit the 630×500 aspect ratio, then resized, with the transparent logo composited top-left in the clear sky rather than centred over the bike |
 
 These four itch crops were produced with a quick ImageMagick centre-crop/composite pass
 from the source concept art — good enough to preview the page layout today, but
