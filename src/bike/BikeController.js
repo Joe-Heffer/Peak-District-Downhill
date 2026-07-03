@@ -14,8 +14,13 @@ const CAMERA_LERP = 0.1;
 // Headlight (see issue #79): mounted near the front/handlebar of the bike, aimed along
 // local +z (the forward axis — see createPlaceholderBikeModel's comment and
 // applyInput's forward vector below), only built when spawned into the night preset.
+// Intensity is in candela (three.js has used physically-based photometric light units
+// since r155, mandatory since r165) and illuminance falls off as intensity/distance^2,
+// so this needs to be in the hundreds-to-low-thousands to read as a visible beam against
+// the `night` preset's ambient moonlight (dirLight ~0.6, hemiLight ~0.55 — see
+// setupSky.js) rather than the flat pre-r155 non-physical scale.
 const HEADLIGHT_COLOR = 0xfff2cc;
-const HEADLIGHT_INTENSITY = 40;
+const HEADLIGHT_INTENSITY = 1200;
 const HEADLIGHT_DISTANCE = 40;
 const HEADLIGHT_ANGLE = 0.5;
 const HEADLIGHT_PENUMBRA = 0.4;
