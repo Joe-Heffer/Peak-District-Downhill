@@ -85,6 +85,29 @@ test('mute button toggles aria-pressed', async ({ page }) => {
   await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('tilt button reflects tilt-steering support in this browser', async ({ page }) => {
+  // A leading slash would resolve against the server root, discarding the GitHub Pages
+  // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
+  await page.goto('./');
+
+  const supported = await page.evaluate(() => typeof window.DeviceOrientationEvent !== 'undefined');
+  const tiltButton = page.locator('#tilt-btn');
+
+  if (!supported) {
+    await expect(tiltButton).toBeHidden();
+    return;
+  }
+
+  await expect(tiltButton).toBeVisible();
+  await expect(tiltButton).toHaveAttribute('aria-pressed', 'false');
+
+  // Same retry pattern as the mute button above — the click listener attaches post-init.
+  await expect(async () => {
+    await tiltButton.click();
+    await expect(tiltButton).toHaveAttribute('aria-pressed', 'true', { timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+});
+
 test('feedback button opens a prefilled GitHub issue in a new tab', async ({ page, context }) => {
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.

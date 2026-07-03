@@ -282,8 +282,13 @@ export class BikeController {
       this.speed < TURN_RATE_MIN_SPEED
         ? TURN_RATE
         : Math.min(TURN_RATE, (GRIP_MU * GRAVITY_MAG) / this.speed);
-    if (inputState.steerLeft) this.yaw += turnCap * dt;
-    if (inputState.steerRight) this.yaw -= turnCap * dt;
+    // Digital (keyboard/touch-button) and analog (tilt) steering combine additively and
+    // then get clamped to +/-1 — the cap represents real tyre grip, not how many input
+    // sources are currently active.
+    const digitalSteer = (inputState.steerLeft ? 1 : 0) - (inputState.steerRight ? 1 : 0);
+    const analogSteer = clamp(typeof inputState.steerAmount === 'number' ? inputState.steerAmount : 0, -1, 1);
+    const steerSignal = clamp(digitalSteer + analogSteer, -1, 1);
+    this.yaw += turnCap * dt * steerSignal;
 
     const forward = new CANNON.Vec3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
 

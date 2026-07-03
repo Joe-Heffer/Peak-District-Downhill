@@ -120,6 +120,26 @@ html, body {
   background: rgba(20, 20, 20, 0.6);
 }
 
+#tilt-btn {
+  position: fixed;
+  top: 8px;
+  right: 96px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.35);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#tilt-btn:active {
+  background: rgba(20, 20, 20, 0.6);
+}
+
 #devtools {
   position: fixed;
   top: 8px;

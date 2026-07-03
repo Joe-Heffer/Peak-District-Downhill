@@ -1,5 +1,12 @@
 export function createInputController() {
-  const state = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: false };
+  const state = {
+    steerLeft: false,
+    steerRight: false,
+    jump: false,
+    brake: false,
+    pedal: false,
+    steerAmount: 0, // continuous -1..1 signal, written externally by TiltController
+  };
 
   bindPointerZone('steer-left', (pressed) => (state.steerLeft = pressed));
   bindPointerZone('steer-right', (pressed) => (state.steerRight = pressed));

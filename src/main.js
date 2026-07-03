@@ -3,6 +3,7 @@ import { setupScene } from './scene/setupScene.js';
 import { setupWorld } from './physics/setupWorld.js';
 import { BikeController } from './bike/BikeController.js';
 import { createInputController } from './input/InputController.js';
+import { createTiltController, isTiltSupported } from './input/TiltController.js';
 import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
@@ -90,6 +91,36 @@ function setUpFeedbackButton() {
   });
 }
 
+// No localStorage persistence: iOS requires a fresh gesture-triggered
+// requestPermission() call every page load anyway, and calibration is inherently a
+// per-session concept (rest angle varies with how the phone is currently held), so
+// every load starts digital-only — tapping the button grants permission and calibrates.
+function setUpTiltButton(inputState) {
+  const button = document.getElementById('tilt-btn');
+  if (!button || !isTiltSupported()) return;
+
+  const tiltController = createTiltController(inputState);
+  button.hidden = false;
+
+  function applyTiltState(enabled) {
+    button.textContent = enabled ? '\u{1F4F2}' : '\u{1F4F1}';
+    button.setAttribute('aria-pressed', String(enabled));
+    button.setAttribute('aria-label', enabled ? 'Disable tilt steering' : 'Enable tilt steering');
+  }
+
+  button.addEventListener('click', async () => {
+    if (tiltController.isEnabled()) {
+      tiltController.disable();
+      applyTiltState(false);
+      return;
+    }
+    const granted = await tiltController.enable();
+    applyTiltState(granted);
+  });
+
+  applyTiltState(false);
+}
+
 async function init() {
   const devTools = createDevTools();
 
@@ -130,6 +161,7 @@ async function init() {
   const tireRollAudio = audioManager.playLoop('tireRoll', 0);
   setUpMuteButton(musicAudio);
   setUpFeedbackButton();
+  setUpTiltButton(inputState);
 
   const clock = new THREE.Clock();
   let timeSinceLocationUpdate = 0;
