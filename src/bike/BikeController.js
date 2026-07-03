@@ -60,11 +60,15 @@ const PEDAL_BURST_ACCEL = 3.0;
 // m/s^2 — weaker, stamina-free effort applied once the burst tank above is empty but the
 // player keeps holding pedal, so pedalling never drops straight to zero propulsion (issue:
 // stamina "should allow a quick burst but then... roll along or... pedal at a steady
-// rate"). Comfortably clears flat-ground rolling resistance (ROLLING_RESISTANCE_COEFF *
-// GRAVITY_MAG ≈ 0.245 m/s^2), so it's a real, sustainable push; quadratic drag then caps
-// it at an equilibrium cruise around ~7.7 m/s (~28 km/h) on flat ground. On any grade
-// steeper than ~2.6% it can't hold speed on its own — climbing still requires the burst.
-const PEDAL_STEADY_ACCEL = 0.5;
+// rate"). Modelled as a bike's low ("granny") gear: real low gearing sacrifices speed for
+// torque so a rider can keep grinding up a steep grade indefinitely, just slowly, without
+// needing to stand up and sprint. Stalls out around ~24.8% grade (vs. the burst rate's
+// ~28-29%), comfortably above Cut Gate's real climbs of up to ~19% grade, so pedalling
+// never actually stops working uphill once stamina runs low — it just gets a lot slower
+// (issue: "real mountain bikes have quite low gearing so it's possible to get up rather
+// steep inclines (if slowly)"). On flat ground it still clears rolling resistance +
+// aero drag easily, settling to a lower equilibrium cruise than the burst rate.
+const PEDAL_STEADY_ACCEL = 2.6;
 
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are
