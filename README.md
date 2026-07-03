@@ -12,7 +12,11 @@ Ride as **Gravity** and **Grit** down real Peak District bridleways — see
 naming decision and [`docs/concept-art-prompts.md`](docs/concept-art-prompts.md) for
 the concept art direction.
 
-Play it live at **[joe-heffer.github.io/Peak-District-Downhill](https://joe-heffer.github.io/Peak-District-Downhill/)**.
+Play it live at **[joe-heffer.github.io/Peak-District-Downhill](https://joe-heffer.github.io/Peak-District-Downhill/)**,
+or on **[itch.io](https://joe-heffer.itch.io/gravity-and-grit)** — the game is in active
+playtesting ahead of a 1.0 release, so feedback on framerate, controls, route feel, and bugs
+is very welcome (comment on the itch.io page or [open an
+issue](https://github.com/Joe-Heffer/Peak-District-Downhill/issues)).
 
 ## Controls
 
@@ -41,6 +45,9 @@ npm run dev       # start the dev server
 npm run build     # build for production (outputs to dist/)
 npm run preview   # preview the production build locally
 ```
+
+See [`docs/itch-io.md`](docs/itch-io.md) for building and publishing the itch.io release
+(`npm run build:itch` / `npm run package:itch`).
 
 ## Project structure
 

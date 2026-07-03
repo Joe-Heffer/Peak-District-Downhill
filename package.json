@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
+    "build:itch": "vite build --mode itch --outDir dist-itch",
+    "package:itch": "npm run build:itch && node tools/itch/package.js",
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:e2e": "playwright test",
