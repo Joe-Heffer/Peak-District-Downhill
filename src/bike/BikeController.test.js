@@ -73,6 +73,44 @@ describe('BikeController.applyInput', () => {
     expect(atRestBike.yaw).toBeCloseTo(TURN_RATE * dt);
   });
 
+  it('steers proportionally from a continuous steerAmount, matching digital steering at +/-1', () => {
+    const dt = 0.1;
+
+    const fullLeft = createBike();
+    fullLeft.applyInput(dt, { steerLeft: false, steerRight: false, jump: false, brake: false, steerAmount: 1 });
+    expect(fullLeft.yaw).toBeCloseTo(TURN_RATE * dt);
+
+    const fullRight = createBike();
+    fullRight.applyInput(dt, { steerLeft: false, steerRight: false, jump: false, brake: false, steerAmount: -1 });
+    expect(fullRight.yaw).toBeCloseTo(-TURN_RATE * dt);
+
+    const halfLeft = createBike();
+    halfLeft.applyInput(dt, { steerLeft: false, steerRight: false, jump: false, brake: false, steerAmount: 0.5 });
+    expect(halfLeft.yaw).toBeCloseTo(0.5 * TURN_RATE * dt);
+  });
+
+  it('caps steerAmount-driven turning by the same lateral grip limit as digital steering', () => {
+    const bike = createBike();
+    const dt = 0.1;
+
+    bike.speed = 20;
+    bike.applyInput(dt, { steerLeft: false, steerRight: false, jump: false, brake: false, steerAmount: 1 });
+    const expectedCap = Math.min(TURN_RATE, (GRIP_MU * GRAVITY_MAG) / 20);
+    expect(bike.yaw).toBeCloseTo(expectedCap * dt);
+  });
+
+  it('combines digital and analog steering additively, clamped rather than doubled', () => {
+    const dt = 0.1;
+
+    const reinforcing = createBike();
+    reinforcing.applyInput(dt, { steerLeft: true, steerRight: false, jump: false, brake: false, steerAmount: 1 });
+    expect(reinforcing.yaw).toBeCloseTo(TURN_RATE * dt);
+
+    const opposing = createBike();
+    opposing.applyInput(dt, { steerLeft: true, steerRight: false, jump: false, brake: false, steerAmount: -1 });
+    expect(opposing.yaw).toBeCloseTo(0);
+  });
+
   it('accelerates down a sloped stub terrain', () => {
     const slopedTerrain = { getHeightAt: (x, z) => -0.1 * z }; // 10% descending grade in +z
     const bike = createBike();
