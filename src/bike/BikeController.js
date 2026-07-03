@@ -70,6 +70,25 @@ const PEDAL_BURST_ACCEL = 3.0;
 // aero drag easily, settling to a lower equilibrium cruise than the burst rate.
 const PEDAL_STEADY_ACCEL = 2.6;
 
+// Rider pose (issue #126): blends a seated "climbing" pose and a low "attack
+// position" descending pose via a single -1..+1 pose factor (see
+// updateRiderPose()), driven by slope/speed/pedal/brake rather than a fixed
+// static mesh.
+const RIDER_POSE_BLEND_RATE = 4; // 1/s exponential approach — ~63% there after 0.25s
+const RIDER_SLOPE_DEADZONE = 0.05; // sinSlope magnitude (~5% grade) below which
+// slope alone doesn't move the pose
+const RIDER_SLOPE_FULL_EFFECT = 0.35; // sinSlope magnitude (~35% grade) for full effect
+const RIDER_ATTACK_SPEED_THRESHOLD = 4; // m/s — fast coasting alone nudges toward attack
+const RIDER_ATTACK_SPEED_RANGE = 6; // m/s — range over which that ramps to full weight
+const RIDER_PEDAL_SEATED_WEIGHT = 0.4; // pull toward climb/seated while pedalling
+const RIDER_BRAKE_ATTACK_WEIGHT = 0.3; // pull toward attack/braced while braking
+const RIDER_MAX_TORSO_PITCH_CLIMB = 0.35; // rad (~20°) forward lean, full climb pose
+const RIDER_MAX_TORSO_PITCH_DESCEND = -0.55; // rad (~-31°) back lean, full attack pose
+const RIDER_MAX_CROUCH_OFFSET = 0.14; // m — hip-pivot drop at full attack pose
+const RIDER_MAX_SETBACK_OFFSET = 0.08; // m — rearward hip-pivot shift at full attack pose
+const RIDER_LANDING_CROUCH_BOOST = 0.1; // m — extra momentary crouch on a hard landing
+const RIDER_LANDING_RECOVERY_RATE = 6; // 1/s — decay rate of that boost back to 0
+
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are
 // millimeters (e.g. its wheels are ~634mm across), hence the 0.001 scale down to meters.
@@ -99,11 +118,34 @@ function createPlaceholderBikeModel() {
   frame.position.set(0, 0.05, 0);
   group.add(frame);
 
-  const rider = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.4, 4, 8), frameMaterial);
-  rider.position.set(0, 0.45, -0.1);
-  group.add(rider);
-
   return group;
+}
+
+// Small procedural rider rig (issue #126): a hip anchor holding a posable pivot
+// (torso + head), posed each step by updateRiderPose(). No skeleton/animation
+// clips — bike.glb ships with zero rider geometry (confirmed: node list is
+// Frame/Helm/Saddle/Wheel_a/Wheel_b/a/b/c/Pedal_a/Pedal_b/Pedal_c, no skin, no
+// animations), so this rig is independent of both createPlaceholderBikeModel()
+// and the loaded glb, and must be re-attached after loadModel()'s mesh.clear()
+// — same pattern as the headlight re-add below.
+function createRiderModel() {
+  const material = new THREE.MeshStandardMaterial({ color: 0x2244cc });
+
+  const root = new THREE.Group();
+  root.position.set(0, 0.45, -0.1); // static anchor — matches the old fused capsule
+
+  const pivot = new THREE.Group(); // updateRiderPose() rotates/translates this
+  root.add(pivot);
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.32, 4, 8), material);
+  torso.position.set(0, 0.22, 0);
+  pivot.add(torso);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), material);
+  head.position.set(0, 0.46, 0);
+  pivot.add(head);
+
+  return { root, pivot };
 }
 
 export class BikeController {
@@ -122,6 +164,16 @@ export class BikeController {
     this.mesh = new THREE.Group();
     this.mesh.add(createPlaceholderBikeModel());
     scene.add(this.mesh);
+
+    const rider = createRiderModel();
+    this.riderRoot = rider.root;
+    this.riderPivot = rider.pivot;
+    this.mesh.add(this.riderRoot);
+    this.riderPoseFactor = 0; // -1 climb/seated .. 0 neutral .. +1 descend/attack
+    this.riderLandingAbsorb = 0; // 0..1, decays after a hard landing
+    this.slopeSin = 0; // mirrors applyInput's local sinSlope
+    this.pedalActive = false;
+    this.brakeActive = false;
 
     // Day/night is fixed for the whole session (no live day/night cycle), so this is
     // decided once here rather than exposed as a toggle.
@@ -171,8 +223,10 @@ export class BikeController {
       gltf.scene.scale.setScalar(MODEL_SCALE);
       gltf.scene.rotation.y = MODEL_ROTATION_Y;
       this.mesh.add(gltf.scene);
-      // clear() above also removed the headlight (a direct child of this.mesh) — re-add it.
+      // clear() above also removed the headlight and rider rig (direct children of
+      // this.mesh) — re-add them.
       if (this.headlight) this.mesh.add(this.headlight, this.headlight.target);
+      this.mesh.add(this.riderRoot);
     } catch {
       // No real model at MODEL_URL yet — keep the procedural placeholder.
     }
@@ -191,6 +245,11 @@ export class BikeController {
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
+    this.slopeSin = 0;
+    this.pedalActive = false;
+    this.brakeActive = false;
+    this.riderPoseFactor = 0;
+    this.riderLandingAbsorb = 0;
   }
 
   // Admin command: moves the bike to an arbitrary world (x, z) without resetting
@@ -202,6 +261,11 @@ export class BikeController {
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
+    this.slopeSin = 0;
+    this.pedalActive = false;
+    this.brakeActive = false;
+    this.riderPoseFactor = 0;
+    this.riderLandingAbsorb = 0;
   }
 
   isGrounded() {
@@ -232,6 +296,9 @@ export class BikeController {
     const slopeLength = Math.hypot(drop, SLOPE_SAMPLE_DISTANCE);
     const sinSlope = drop / slopeLength;
     const cosSlope = SLOPE_SAMPLE_DISTANCE / slopeLength;
+    this.slopeSin = sinSlope; // >0 descending, <0 climbing — read by updateRiderPose()
+    this.pedalActive = Boolean(inputState.pedal);
+    this.brakeActive = Boolean(inputState.brake);
 
     const gravityAccel = GRAVITY_MAG * sinSlope;
     const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
@@ -273,7 +340,7 @@ export class BikeController {
     return jumped;
   }
 
-  syncAfterStep() {
+  syncAfterStep(dt = 1 / 60) {
     // Hard-landing heuristic: was airborne last frame, is grounded now, and was
     // falling fast just before this step's collision response resolved it.
     const nowGrounded = this.isGrounded();
@@ -282,10 +349,51 @@ export class BikeController {
     this.wasGrounded = nowGrounded;
     this.previousVerticalVelocity = this.body.velocity.y;
 
+    this.updateRiderPose(dt);
+
     this.mesh.position.copy(this.body.position);
     this.mesh.quaternion.copy(this.body.quaternion);
 
     this.updateCamera();
+  }
+
+  // Rider pose (issue #126): blends a single -1..+1 pose factor (climb/seated ..
+  // neutral .. descend/attack) from slope/speed/pedal/brake state stashed by
+  // applyInput(), then maps it onto the rider pivot's torso pitch + crouch/setback.
+  // Blended via exponential approach so weight shifts read as smooth, not a snap.
+  // Hard-landing absorb bypasses that blend deliberately — a landing compression
+  // is a reflex, not a gradual weight shift.
+  updateRiderPose(dt) {
+    const slopeMagnitude = Math.max(0, Math.abs(this.slopeSin) - RIDER_SLOPE_DEADZONE);
+    const slopeRange = RIDER_SLOPE_FULL_EFFECT - RIDER_SLOPE_DEADZONE;
+    const slopeFactor = clamp(slopeMagnitude / slopeRange, 0, 1) * Math.sign(this.slopeSin);
+
+    const speedFactor = clamp(
+      (this.speed - RIDER_ATTACK_SPEED_THRESHOLD) / RIDER_ATTACK_SPEED_RANGE,
+      0,
+      1,
+    );
+    const pedalFactor = this.pedalActive ? -RIDER_PEDAL_SEATED_WEIGHT : 0;
+    const brakeFactor = this.brakeActive ? RIDER_BRAKE_ATTACK_WEIGHT : 0;
+
+    const targetPoseFactor = clamp(slopeFactor + speedFactor + pedalFactor + brakeFactor, -1, 1);
+
+    const blend = 1 - Math.exp(-RIDER_POSE_BLEND_RATE * dt);
+    this.riderPoseFactor += (targetPoseFactor - this.riderPoseFactor) * blend;
+
+    this.riderLandingAbsorb = this.hardLanding
+      ? 1
+      : Math.max(0, this.riderLandingAbsorb - RIDER_LANDING_RECOVERY_RATE * dt);
+
+    const f = this.riderPoseFactor;
+    const pitch = f < 0 ? -f * RIDER_MAX_TORSO_PITCH_CLIMB : f * RIDER_MAX_TORSO_PITCH_DESCEND;
+    const attackAmount = Math.max(f, 0);
+    const crouch =
+      attackAmount * RIDER_MAX_CROUCH_OFFSET + this.riderLandingAbsorb * RIDER_LANDING_CROUCH_BOOST;
+    const setback = attackAmount * RIDER_MAX_SETBACK_OFFSET;
+
+    this.riderPivot.rotation.x = pitch;
+    this.riderPivot.position.set(0, -crouch, -setback);
   }
 
   updateCamera() {

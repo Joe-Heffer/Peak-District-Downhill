@@ -367,6 +367,142 @@ describe('BikeController.syncAfterStep', () => {
   });
 });
 
+describe('BikeController rider pose (issue #126)', () => {
+  it('adds a rider rig as a child of mesh, and it survives a successful model load', async () => {
+    const bike = createBike();
+    expect(bike.riderRoot).toBeInstanceOf(THREE.Group);
+    expect(bike.mesh.children).toContain(bike.riderRoot);
+
+    GLTFLoader.prototype.loadAsync.mockResolvedValue({ scene: new THREE.Group() });
+    await bike.loadModel();
+    expect(bike.mesh.children).toContain(bike.riderRoot);
+  });
+
+  it('defaults to a neutral pose', () => {
+    const bike = createBike();
+    expect(bike.riderPoseFactor).toBe(0);
+    expect(bike.riderPivot.rotation.x).toBe(0);
+    expect(bike.riderPivot.position.x).toBe(0);
+    expect(bike.riderPivot.position.y).toBe(0);
+    expect(bike.riderPivot.position.z).toBe(0);
+  });
+
+  it('blends toward a seated, forward-leaning pose on a realistic uphill grade while pedalling', () => {
+    const bike = createBike();
+    bike.slopeSin = -0.2; // climbing
+    bike.pedalActive = true;
+    bike.speed = 2;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.updateRiderPose(1 / 60);
+    }
+
+    expect(bike.riderPoseFactor).toBeLessThan(0);
+    expect(bike.riderPivot.rotation.x).toBeGreaterThan(0);
+    expect(bike.riderPivot.position.y).toBeCloseTo(0);
+  });
+
+  it('blends toward a low, set-back attack pose on a steep descent at speed', () => {
+    const bike = createBike();
+    bike.slopeSin = 0.3; // descending
+    bike.speed = 12;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.updateRiderPose(1 / 60);
+    }
+
+    expect(bike.riderPoseFactor).toBeGreaterThan(0);
+    expect(bike.riderPivot.rotation.x).toBeLessThan(0);
+    expect(bike.riderPivot.position.y).toBeLessThan(0);
+    expect(bike.riderPivot.position.z).toBeLessThan(0);
+  });
+
+  it('stays neutral on flat ground at rest', () => {
+    const bike = createBike();
+
+    for (let i = 0; i < 10; i += 1) {
+      bike.updateRiderPose(1 / 60);
+    }
+
+    expect(bike.riderPoseFactor).toBeCloseTo(0);
+    expect(bike.riderPivot.rotation.x).toBeCloseTo(0);
+  });
+
+  it('blends gradually toward the target rather than snapping', () => {
+    const bike = createBike();
+    bike.slopeSin = 0.3;
+    bike.speed = 12;
+
+    bike.updateRiderPose(1 / 60);
+    const factorAfterOneStep = bike.riderPoseFactor;
+    expect(factorAfterOneStep).toBeGreaterThan(0);
+    expect(factorAfterOneStep).toBeLessThan(0.3); // well short of the converged value
+
+    bike.updateRiderPose(1 / 60);
+    expect(bike.riderPoseFactor).toBeGreaterThan(factorAfterOneStep);
+  });
+
+  it('braking alone nudges the pose toward attack/braced even at rest', () => {
+    const bike = createBike();
+    bike.brakeActive = true;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.updateRiderPose(1 / 60);
+    }
+
+    expect(bike.riderPoseFactor).toBeGreaterThan(0);
+  });
+
+  it('high speed alone (no pedal/brake) nudges the pose toward attack', () => {
+    const bike = createBike();
+    bike.speed = 15;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.updateRiderPose(1 / 60);
+    }
+
+    expect(bike.riderPoseFactor).toBeGreaterThan(0);
+  });
+
+  it('snaps in an extra crouch on a hard landing and decays it once the landing clears', () => {
+    const bike = createBike();
+    bike.hardLanding = true;
+    bike.updateRiderPose(1 / 60);
+    expect(bike.riderLandingAbsorb).toBe(1);
+
+    bike.hardLanding = false;
+    let previousAbsorb = bike.riderLandingAbsorb;
+    for (let i = 0; i < 10; i += 1) {
+      bike.updateRiderPose(1 / 60);
+      expect(bike.riderLandingAbsorb).toBeLessThanOrEqual(previousAbsorb);
+      previousAbsorb = bike.riderLandingAbsorb;
+    }
+    expect(bike.riderLandingAbsorb).toBeGreaterThanOrEqual(0);
+  });
+
+  it('calling syncAfterStep with no dt argument does not throw and leaves the pose finite', () => {
+    const bike = createBike();
+    expect(() => bike.syncAfterStep()).not.toThrow();
+    expect(Number.isFinite(bike.riderPoseFactor)).toBe(true);
+  });
+
+  it('applyInput stashes slope/pedal/brake state that syncAfterStep then feeds into the pose', () => {
+    const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z };
+    const bike = createBike();
+    bike.terrain = steepUphillTerrain;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.applyInput(dt, input);
+      bike.syncAfterStep(dt);
+    }
+
+    expect(bike.slopeSin).toBeLessThan(0); // climbing
+    expect(bike.riderPoseFactor).toBeLessThan(0);
+  });
+});
+
 describe('BikeController headlight (issue #79)', () => {
   it('adds a headlight + target as children of mesh only when constructed at night', () => {
     const nightBike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0 }, undefined, true);
