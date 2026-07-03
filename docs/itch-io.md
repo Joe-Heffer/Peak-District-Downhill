@@ -65,6 +65,15 @@ still run, so CI failures there are unrelated to itch.io credentials.
    should be controllable, and the browser console should show no 404s (check the network tab
    for `data/...` and `assets/...` requests).
 
+## Page styling and images
+
+The itch.io **Edit game** → **Theme** tab has fields for the page's BG/BG2/Text/Link
+colours, a font picker, and Banner/Background/Embed background image uploads (plus a
+separate Cover image field back on the main **Edit game** tab). See
+[`style-guide.md`](style-guide.md#itchio-page-setup) for the recommended colour values
+and the concept-art crops to upload for each field — they're saved under
+[`images/itch-io/`](images/itch-io/).
+
 ## Project page description (draft)
 
 > **Gravity & Grit: Peak District Downhill**

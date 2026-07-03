@@ -10,6 +10,11 @@ These are a starting point for exploration, not a locked spec — regenerate, re
 crop freely. Nothing here is committed as final game art; treat outputs as concept
 sketches to react to.
 
+A first pass of generated art from these prompts is saved under
+[`images/concept-art/`](images/concept-art/) — see
+[`style-guide.md`](style-guide.md) for the resulting colour palette, logo usage rules,
+and how these images map onto the itch.io store page.
+
 ## How to keep everything looking like one game
 
 Nano Banana is conversational and supports feeding an image back in as a reference, so
@@ -54,6 +59,8 @@ direction paragraph above.] No text, no logo — this is a pure style reference 
 palette, linework, and lighting to reuse in later images.
 ```
 
+![Style anchor: a lone mountain bike mid-jump off a gritstone boulder on a moorland bridleway](images/concept-art/style-anchor-bike-jump.png)
+
 ## 1. Title / logo art
 
 ### 1a. Primary logo lockup
@@ -68,6 +75,13 @@ the palette's bracken-orange and heather-purple into the letters, gritstone grey
 depth/bevels. Background transparent or a simple dark gradient so the logo reads as a
 standalone asset.
 ```
+
+![Primary logo lockup on gritstone](images/concept-art/logo-lockup-stone-carved.png)
+
+An alternate illustrated woodcut-badge treatment was also generated as a reference
+option — see `images/concept-art/logo-lockup-woodcut-badge.jpeg`. For compositing the
+wordmark over other art (as in the two lockups above, or `og-image.png`), use
+`images/concept-art/logo-mark-transparent.png`, which has a real alpha channel.
 
 ### 1b. Subtitle lockup variant
 
@@ -167,6 +181,12 @@ rim light along the rock edges. Loading-screen composition — foreground rock d
 sharp, background soft and atmospheric.
 ```
 
+![A rider descending past a Stanage Edge waymarker, spectators watching from the tor](images/concept-art/style-anchor-stanage-descent.png)
+
+Note this particular generation includes a real "STANAGE EDGE 1.5 MILES" waymarker —
+useful as generic gritstone-edge atmosphere, but the game only models Cut Gate so far,
+so don't use this one anywhere it could read as a claim about in-game locations.
+
 ### 3c. Dry-stone wall & bridleway close-up
 
 ```
@@ -199,6 +219,8 @@ below before dropping in. Golden late-afternoon light, dramatic sky, heather and
 gritstone framing the shot. Leave open sky/negative space in the upper portion for
 menu buttons to overlay.
 ```
+
+![Riders working a gritstone tor, with the logo lockup and a "Sessioning the Tor" caption](images/concept-art/key-art-sessioning-the-tor.png)
 
 ### 4b. Crash / game-over screen
 
@@ -242,6 +264,13 @@ badges (bronze/silver/gold equivalents reimagined as gritstone/heather/gold-ligh
 tiers) for run completion ranks, each with a small embossed bike-wheel or gritstone
 motif in the centre, weathered stone-carved look with a subtle metallic rim.
 ```
+
+![A character-customisation screen mockup with jersey/shorts/helmet/bike-component pickers and achievement badges](images/concept-art/ui-character-customization.png)
+
+The above wasn't generated from an exact prompt in this doc — it's an exploratory UI
+concept combining a kit-customisation screen with achievement-badge styling ("Mud-Caked
+Victory", "Gritstone Guardian"), kept here as a reference for badge/medal treatment and
+general HUD panel styling (weathered stone-tablet buttons, parchment-on-charcoal text).
 
 ### 5c. App icon / favicon
 
