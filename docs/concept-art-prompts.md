@@ -76,12 +76,11 @@ depth/bevels. Background transparent or a simple dark gradient so the logo reads
 standalone asset.
 ```
 
-![Primary logo lockup on gritstone](images/concept-art/logo-lockup-stone-carved.png)
-
-An alternate illustrated woodcut-badge treatment was also generated as a reference
-option — see `images/concept-art/logo-lockup-woodcut-badge.jpeg`. For compositing the
-wordmark over other art (as in the two lockups above, or `og-image.png`), use
-`images/concept-art/logo-mark-transparent.png`, which has a real alpha channel.
+A stone-carved lockup and an alternate illustrated woodcut-badge treatment were also
+generated from this prompt, but were dropped in favour of the cleaner, more consistent
+style of `images/concept-art/logo-mark-transparent.png`, which has a real alpha channel
+and is now the sole logo asset. For compositing the wordmark over other art (as in
+`og-image.png`), use that file.
 
 ### 1b. Subtitle lockup variant
 

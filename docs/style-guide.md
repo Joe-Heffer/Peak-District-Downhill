@@ -41,8 +41,8 @@ treat that as a placeholder worth revisiting once real terrain art lands, not a 
 ## Typography
 
 - **Logo/display**: a bold, chunky, slightly weathered display face — see
-  `logo-lockup-stone-carved.png` and `logo-mark-transparent.png`. Don't substitute a
-  clean geometric sans for the logo itself; the weathering/bevel is part of the brand.
+  `logo-mark-transparent.png`. Don't substitute a clean geometric sans for the logo
+  itself; the weathering/bevel is part of the brand.
 - **Subtitle/UI headings**: a narrower condensed sans-serif (stencil/waymarker feel) —
   see "PEAK DISTRICT DOWNHILL" in the lockups.
 - **Body/UI text**: the game itself uses `system-ui, sans-serif` (`src/style.css`) — keep
@@ -51,15 +51,12 @@ treat that as a placeholder worth revisiting once real terrain art lands, not a 
 
 ## Logo usage
 
-- `logo-mark-transparent.png` is the primary standalone mark (real alpha transparency —
-  it was regenerated from the source Gemini output, which only *looked* transparent via
-  a painted-on checkerboard rather than an actual alpha channel). Use this version for
-  any compositing work; don't reuse the original checkerboard PNG.
-- `logo-lockup-stone-carved.png` (full lockup with "PEAK DISTRICT DOWNHILL" subtitle, on
-  a stone texture) is the marketing lockup — used as the itch.io banner as-is.
-- `logo-lockup-woodcut-badge.jpeg` is an alternate illustrated/woodcut treatment, kept as
-  a reference option — not currently used as the primary mark, since its style (loose
-  engraving) reads differently to the cel-shaded art direction used everywhere else.
+- `logo-mark-transparent.png` is the primary and only logo asset (real alpha
+  transparency — it was regenerated from the source Gemini output, which only *looked*
+  transparent via a painted-on checkerboard rather than an actual alpha channel). Use
+  this version for any compositing work; don't reuse the original checkerboard PNG.
+  The stone-carved lockup and woodcut-badge alternates generated alongside it were
+  dropped in favour of this mark's cleaner, more consistent style.
 - Maintain clear space around the mark roughly equal to the height of the "G" in
   "GRAVITY"; don't crop the baseline scuff/dirt texture.
 
@@ -85,7 +82,7 @@ above:
 | Text | `#EDE6DC` | Parchment — readable on the dark BG/BG2 above |
 | Link | `#C6702F` | Bracken Orange |
 | Font | Lato, size Large | Confirmed available in itch's picker; try Oswald or Montserrat first if offered — either reads closer to the logo's condensed-stencil subtitle style |
-| Banner | [`images/itch-io/banner-960x360.png`](images/itch-io/banner-960x360.png) | Cropped from `logo-lockup-stone-carved.png`; itch's max display width is 960px, height <400px |
+| Banner | *(needs regenerating)* | Previous crop was sourced from the now-removed stone-carved lockup; replace with a banner built around `logo-mark-transparent.png` instead. Itch's max display width is 960px, height <400px |
 | Background | [`images/itch-io/page-background-1920x1080.png`](images/itch-io/page-background-1920x1080.png) | Cropped/upscaled from `style-anchor-stanage-descent.png` — note it includes a "STANAGE EDGE 1.5 MILES" waymarker; the game currently only models Cut Gate, so treat this purely as generic gritstone-moorland atmosphere, not a claim about in-game locations. Regenerate without the sign if that reads as misleading |
 | Embed background image | [`images/itch-io/embed-background-640x360.png`](images/itch-io/embed-background-640x360.png) | Cropped from `key-art-sessioning-the-tor.png` at very close to itch's native 640×360, so minimal quality loss |
 | Cover image | [`images/itch-io/cover-630x500.png`](images/itch-io/cover-630x500.png) | `style-anchor-bike-jump.png` centre-cropped to 630×500 with the transparent logo composited on top |
@@ -115,9 +112,7 @@ these):
 
 | File | Description |
 | --- | --- |
-| `logo-lockup-stone-carved.png` | Primary lockup, "GRAVITY & GRIT / PEAK DISTRICT DOWNHILL" carved into gritstone (prompt 1b) |
-| `logo-lockup-woodcut-badge.jpeg` | Alternate illustrated woodcut-badge logo treatment |
-| `logo-mark-transparent.png` | Standalone wordmark, real alpha transparency, for compositing |
+| `logo-mark-transparent.png` | Standalone wordmark, real alpha transparency, for compositing — the primary logo asset |
 | `style-anchor-bike-jump.png` | Style anchor: lone bike mid-jump off a gritstone boulder (prompt 0) |
 | `style-anchor-stanage-descent.png` | Rider descending past a "Stanage Edge" waymarker with spectators on the tor |
 | `key-art-sessioning-the-tor.png` | Wide key art: riders working a gritstone tor, logo + "Sessioning the Tor" caption |
