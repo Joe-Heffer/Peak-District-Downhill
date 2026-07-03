@@ -93,6 +93,8 @@ export class BikeController {
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
 
+    this.spawnPoint = { x: spawnPoint.x, z: spawnPoint.z };
+
     this.mesh = new THREE.Group();
     this.mesh.add(createPlaceholderBikeModel());
     scene.add(this.mesh);
@@ -150,6 +152,32 @@ export class BikeController {
     } catch {
       // No real model at MODEL_URL yet — keep the procedural placeholder.
     }
+  }
+
+  // Admin command (see src/devtools/DevTools.js): resets the bike back to the exact
+  // state the constructor set it up in, for a "start the run over" dev/admin action.
+  respawn() {
+    const spawnY = this.terrain.getHeightAt(this.spawnPoint.x, this.spawnPoint.z) + SPAWN_CLEARANCE;
+    this.body.position.set(this.spawnPoint.x, spawnY, this.spawnPoint.z);
+    this.body.velocity.set(0, 0, 0);
+    this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
+    this.yaw = 0;
+    this.speed = 0;
+    this.stamina = MAX_STAMINA;
+    this.wasGrounded = true;
+    this.previousVerticalVelocity = 0;
+    this.hardLanding = false;
+  }
+
+  // Admin command: moves the bike to an arbitrary world (x, z) without resetting
+  // yaw/speed/stamina — a "go here", not a "restart", so mid-run progress is kept.
+  teleport(x, z) {
+    const y = this.terrain.getHeightAt(x, z) + SPAWN_CLEARANCE;
+    this.body.position.set(x, y, z);
+    this.body.velocity.set(0, 0, 0);
+    this.wasGrounded = true;
+    this.previousVerticalVelocity = 0;
+    this.hardLanding = false;
   }
 
   isGrounded() {

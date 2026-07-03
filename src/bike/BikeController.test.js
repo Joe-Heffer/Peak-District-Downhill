@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BikeController } from './BikeController.js';
 
 const RADIUS = 0.5;
+const SPAWN_CLEARANCE = RADIUS + 0.05;
 const GROUNDED_EPSILON = 0.05;
 const TURN_RATE = 2.2;
 const GRIP_MU = 0.8;
@@ -292,5 +293,77 @@ describe('BikeController headlight (issue #79)', () => {
 
     expect(bike.mesh.children).toContain(bike.headlight);
     expect(bike.mesh.children).toContain(bike.headlight.target);
+  });
+});
+
+describe('BikeController.respawn (issue #81)', () => {
+  it('resets position, velocity, yaw, speed, and stamina back to spawn state', () => {
+    const spawnPoint = { x: 12, z: -34 };
+    const bike = createBike(spawnPoint);
+
+    bike.body.position.set(100, 50, 100);
+    bike.body.velocity.set(3, -2, 5);
+    bike.yaw = 1.5;
+    bike.speed = 10;
+    bike.stamina = 0.2;
+    bike.wasGrounded = false;
+    bike.previousVerticalVelocity = -20;
+    bike.hardLanding = true;
+
+    bike.respawn();
+
+    expect(bike.body.position.x).toBeCloseTo(spawnPoint.x);
+    expect(bike.body.position.y).toBeCloseTo(SPAWN_CLEARANCE);
+    expect(bike.body.position.z).toBeCloseTo(spawnPoint.z);
+    expect(bike.body.velocity.x).toBeCloseTo(0);
+    expect(bike.body.velocity.y).toBeCloseTo(0);
+    expect(bike.body.velocity.z).toBeCloseTo(0);
+    expect(bike.yaw).toBe(0);
+    expect(bike.speed).toBe(0);
+    expect(bike.stamina).toBe(1);
+    expect(bike.wasGrounded).toBe(true);
+    expect(bike.previousVerticalVelocity).toBe(0);
+    expect(bike.hardLanding).toBe(false);
+  });
+
+  it('resamples spawn height from the current terrain rather than reusing a stale value', () => {
+    const slopedTerrain = { getHeightAt: (x, z) => -0.1 * z };
+    const bike = new BikeController(scene, world, camera, slopedTerrain, { x: 0, z: 20 });
+
+    bike.body.position.set(0, 0, 0);
+    bike.respawn();
+
+    expect(bike.body.position.y).toBeCloseTo(slopedTerrain.getHeightAt(0, 20) + SPAWN_CLEARANCE);
+    expect(bike.body.position.z).toBeCloseTo(20);
+  });
+});
+
+describe('BikeController.teleport (issue #81)', () => {
+  it('moves the bike and zeroes velocity/grounding state, leaving yaw/speed/stamina untouched', () => {
+    const constantHeightTerrain = { getHeightAt: () => 5 };
+    const bike = new BikeController(scene, world, camera, constantHeightTerrain, { x: 0, z: 0 });
+
+    bike.body.velocity.set(3, -2, 5);
+    bike.yaw = 0.7;
+    bike.speed = 8;
+    bike.stamina = 0.4;
+    bike.wasGrounded = false;
+    bike.previousVerticalVelocity = -20;
+    bike.hardLanding = true;
+
+    bike.teleport(40, -60);
+
+    expect(bike.body.position.x).toBeCloseTo(40);
+    expect(bike.body.position.y).toBeCloseTo(5 + SPAWN_CLEARANCE);
+    expect(bike.body.position.z).toBeCloseTo(-60);
+    expect(bike.body.velocity.x).toBeCloseTo(0);
+    expect(bike.body.velocity.y).toBeCloseTo(0);
+    expect(bike.body.velocity.z).toBeCloseTo(0);
+    expect(bike.wasGrounded).toBe(true);
+    expect(bike.previousVerticalVelocity).toBe(0);
+    expect(bike.hardLanding).toBe(false);
+    expect(bike.yaw).toBe(0.7);
+    expect(bike.speed).toBe(8);
+    expect(bike.stamina).toBe(0.4);
   });
 });
