@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { applySky } from './setupSky.js';
 
 export function setupScene() {
@@ -11,6 +12,14 @@ export function setupScene() {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
+
+  // Image-based lighting: gives every MeshStandardMaterial (bike, terrain, scenery)
+  // realistic ambient-specular reflections for free, instead of the flat/plasticky look
+  // hemisphere+directional lighting alone produces. Generic interior room for now — a
+  // follow-up will swap this for an outdoor HDRI to match the moorland sky (see #19).
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture;
+  pmremGenerator.dispose();
 
   // Cut Gate's real terrain spans kilometres, not the old 200x200 flat toy plane, and the
   // sky dome (see setupSky.js) needs headroom beyond its own scale, so the far plane is
