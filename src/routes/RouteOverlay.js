@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
-// Slightly raised to ensure the line doesn't z-fight with uneven terrain
-const ROUTE_HEIGHT_OFFSET = 0.25; 
+// Floated well above the terrain so the route reads as an overhead trail marker
+// rather than a painted line on the ground — also keeps it clear of z-fighting.
+const ROUTE_HEIGHT_OFFSET = 1.5;
 
 export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/routes/cutgate.json`) {
   const response = await fetch(url);
@@ -32,14 +33,14 @@ export function buildRouteOverlay(routeData, terrain) {
   const curvePoints = curve.getPoints(points.length * 4);
   const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
   
-  // Use a subtle dashed material instead of a solid tube
+  // Green dashed line, echoing the public bridleway symbol on OS Explorer maps.
   const material = new THREE.LineDashedMaterial({
-    color: 0xffcc00,
+    color: 0x1a8f3c,
     linewidth: 1, // Note: Most WebGL implementations enforce a max linewidth of 1
-    dashSize: 2.5,
-    gapSize: 5.0,
+    dashSize: 3.0,
+    gapSize: 3.0,
     transparent: true,
-    opacity: 0.6
+    opacity: 0.85
   });
 
   const line = new THREE.Line(geometry, material);
