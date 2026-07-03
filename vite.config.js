@@ -13,4 +13,22 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: true,
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Split the big, slow-changing 3D libs into their own chunks so
+        // browsers can cache them separately from app code that changes
+        // every release.
+        codeSplitting: {
+          groups: [
+            { name: 'three', test: /node_modules[\\/]three[\\/]/ },
+            { name: 'cannon-es', test: /node_modules[\\/]cannon-es[\\/]/ },
+          ],
+        },
+      },
+    },
+    // three.js alone minifies to ~630 kB; raise the warning limit past that
+    // known, unavoidable size instead of chasing an unreachable threshold.
+    chunkSizeWarningLimit: 700,
+  },
 }));
