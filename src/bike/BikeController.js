@@ -45,7 +45,7 @@ const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULS
 // unit. Drain/regen rates are tuned by feel like the drag/rolling-resistance figures
 // above, not derived from real rider physiology.
 const MAX_STAMINA = 1;
-const STAMINA_DRAIN_RATE = 1 / 6; // per second — full tank drains in ~6s of continuous pedalling
+const STAMINA_DRAIN_RATE = 1 / 15; // per second — full tank drains in ~15s of continuous pedalling
 const STAMINA_REGEN_RATE = 1 / 10; // per second while coasting — full regen in ~10s
 const STAMINA_REGEN_RATE_RESTING = 1 / 5; // per second while braking/near-stationary — faster
 const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting" for regen
@@ -56,7 +56,15 @@ const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting
 // uphill segments up to ~19% grade; 3.0 clears that with margin (theoretical stall grade
 // ~28-29%), whereas the previous 1.2 stalled out above ~10.7% grade — most of the route's
 // climbs (issue: "pedal mode ... can't go uphill").
-const PEDAL_ACCEL = 3.0;
+const PEDAL_BURST_ACCEL = 3.0;
+// m/s^2 — weaker, stamina-free effort applied once the burst tank above is empty but the
+// player keeps holding pedal, so pedalling never drops straight to zero propulsion (issue:
+// stamina "should allow a quick burst but then... roll along or... pedal at a steady
+// rate"). Comfortably clears flat-ground rolling resistance (ROLLING_RESISTANCE_COEFF *
+// GRAVITY_MAG ≈ 0.245 m/s^2), so it's a real, sustainable push; quadratic drag then caps
+// it at an equilibrium cruise around ~7.7 m/s (~28 km/h) on flat ground. On any grade
+// steeper than ~2.6% it can't hold speed on its own — climbing still requires the burst.
+const PEDAL_STEADY_ACCEL = 0.5;
 
 // Real model drop-in point: public/assets/models/bike.glb. If it's missing, loadModel()
 // below fails quietly and the procedural placeholder stays. The model's native units are
@@ -225,7 +233,11 @@ export class BikeController {
     const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
     const dragAccel = (0.5 * AIR_DENSITY * DRAG_CDA * this.speed * this.speed) / BIKE_MASS;
     const brakeAccel = inputState.brake ? BRAKE_MU * GRAVITY_MAG * cosSlope : 0;
-    const pedalAccel = inputState.pedal && this.stamina > 0 ? PEDAL_ACCEL : 0;
+    const pedalAccel = inputState.pedal
+      ? this.stamina > 0
+        ? PEDAL_BURST_ACCEL
+        : PEDAL_STEADY_ACCEL
+      : 0;
     const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel + pedalAccel;
     this.speed = clamp(this.speed + netAccel * dt, 0, MAX_SPEED);
 
