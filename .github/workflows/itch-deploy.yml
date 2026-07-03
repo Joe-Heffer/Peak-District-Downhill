@@ -19,11 +19,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:itch
+      - name: Setup butler
+        uses: remarkablegames/setup-butler@v3
+
       - name: Publish to itch.io
-        uses: manleydev/butler-publish-itchio-action@v1.2.0
+        run: butler push dist-itch joe-heffer/gravity-and-grit:html5
         env:
-          BUTLER_CREDENTIALS: ${{ secrets.BUTLER_API_KEY }}
-          CHANNEL: html5
-          ITCH_GAME: gravity-and-grit
-          ITCH_USER: joe-heffer
-          PACKAGE: dist-itch
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
