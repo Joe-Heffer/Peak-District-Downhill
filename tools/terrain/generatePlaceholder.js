@@ -16,7 +16,7 @@ import {
   LANDCOVER_OUT,
   PATHS_OUT,
 } from './config.js';
-import { PATH_CATEGORIES } from './pathClassification.js';
+import { PATH_CATEGORIES, clipPolylineToBbox } from './pathClassification.js';
 
 const LANDCOVER_CLASSES = ['grass', 'wood', 'rock', 'heather', 'track'];
 
@@ -102,20 +102,44 @@ const routeData = {
   points: routePoints,
 };
 
-// One short synthetic branch per path category, forking off fixed points along the
-// placeholder route — deterministic (no Math.random()), just enough to exercise
-// src/routes/PathsOverlay.js's per-category rendering without needing network access.
-function branchFrom(routeIndex, dirE, dirN, length, steps) {
+// Several synthetic branches per path category, forking off points spread along the
+// placeholder route with a gentle deterministic wobble (sin-based, no Math.random(),
+// same idiom as syntheticElevation()/the route's wanderFraction above) — enough to read
+// as a real crisscrossing network for exercising src/routes/PathsOverlay.js's
+// per-category rendering without needing network access. Widths mirror (but
+// deliberately don't import — tools/terrain is a plain-Node pipeline kept independent
+// of the Vite app) src/routes/PathsOverlay.js's PATH_STYLES widths, used here only to
+// size each category's landcover track-buffer margin below.
+const BRANCHES_PER_CATEGORY = 5;
+const BRANCH_STEPS = 6;
+const pathBranchLength = Math.min(bboxWidth, bboxHeight) * 0.15;
+const CATEGORY_WIDTHS = { road: 3.5, bridleway: 1.8, footpath: 0.9 };
+
+function routeDirectionAt(routeIndex) {
+  const a = routePoints[Math.max(routeIndex - 1, 0)];
+  const b = routePoints[Math.min(routeIndex + 1, routePoints.length - 1)];
+  const len = Math.hypot(b.e - a.e, b.n - a.n) || 1;
+  return { e: (b.e - a.e) / len, n: (b.n - a.n) / len };
+}
+
+// Forks off the route at `routeIndex`, heading away perpendicular to the route
+// (`side`: +1/-1), with a lengthwise wobble so it doesn't read as a dead-straight spoke.
+function branchFrom(routeIndex, side, length, steps, seed) {
   const origin = routePoints[routeIndex];
+  const dir = routeDirectionAt(routeIndex);
+  const perpE = -dir.n * side;
+  const perpN = dir.e * side;
+
   const points = [origin];
   for (let s = 1; s <= steps; s += 1) {
     const t = (s / steps) * length;
-    points.push({ e: origin.e + dirE * t, n: origin.n + dirN * t });
+    const wobble = Math.sin(seed + s * 0.9) * length * 0.12;
+    points.push({ e: origin.e + perpE * t + dir.e * wobble, n: origin.n + perpN * t + dir.n * wobble });
   }
   return points;
 }
 
-const pathBranchLength = Math.min(bboxWidth, bboxHeight) * 0.15;
+const localBbox = { minE: 0, maxE: bboxWidth, minN: 0, maxN: bboxHeight };
 
 const pathsData = {
   placeholder: true,
@@ -124,12 +148,29 @@ const pathsData = {
   categories: PATH_CATEGORIES,
   source: PLACEHOLDER_NOTICE,
   license: PLACEHOLDER_NOTICE,
-  paths: [
-    { category: 'footpath', wayId: null, points: branchFrom(10, 1, 0.4, pathBranchLength, 6) },
-    { category: 'bridleway', wayId: null, points: branchFrom(20, -1, 0.3, pathBranchLength, 6) },
-    { category: 'road', wayId: null, points: branchFrom(30, 1, -0.2, pathBranchLength, 6) },
-  ],
+  paths: [],
 };
+
+// Interleave every category's branches along the route (rather than looping category
+// then branch-index) so all 15 forks spread out to distinct points along the descent —
+// looping the other way would put one branch of each category at the same 5 origins,
+// stacking them into near-parallel clusters instead of a spread-out network.
+const totalBranches = BRANCHES_PER_CATEGORY * PATH_CATEGORIES.length;
+PATH_CATEGORIES.forEach((category, categoryIndex) => {
+  for (let b = 0; b < BRANCHES_PER_CATEGORY; b += 1) {
+    const globalIndex = categoryIndex * BRANCHES_PER_CATEGORY + b;
+    const seed = globalIndex;
+    const fraction = (globalIndex + 1) / (totalBranches + 1);
+    const routeIndex = Math.round((0.05 + fraction * 0.9) * (routePoints.length - 1));
+    const side = globalIndex % 2 === 0 ? 1 : -1;
+    const length = pathBranchLength * (0.6 + 0.4 * Math.sin(seed * 1.3 + 1));
+    const points = branchFrom(routeIndex, side, length, BRANCH_STEPS, seed);
+
+    for (const segment of clipPolylineToBbox(points, localBbox)) {
+      pathsData.paths.push({ category, wayId: null, points: segment });
+    }
+  }
+});
 
 // Synthetic landcover, deterministic (sin/cos-based, no Math.random()) like the
 // elevation/route shaping above — a few fixed patches standing in for real OSM-derived
@@ -157,12 +198,30 @@ function distanceToSegment(point, a, b) {
   return Math.hypot(point.e - closestE, point.n - closestN);
 }
 
-function distanceToRoute(point) {
+function distanceToPolyline(point, points) {
   let min = Infinity;
-  for (let s = 0; s < routePoints.length - 1; s += 1) {
-    min = Math.min(min, distanceToSegment(point, routePoints[s], routePoints[s + 1]));
+  for (let s = 0; s < points.length - 1; s += 1) {
+    min = Math.min(min, distanceToSegment(point, points[s], points[s + 1]));
   }
   return min;
+}
+
+function distanceToRoute(point) {
+  return distanceToPolyline(point, routePoints);
+}
+
+// Per-category buffer (half the ribbon width + a small margin, mirroring
+// CATEGORY_WIDTHS above) so the terrain's tan `track` tint plausibly underlies each
+// rendered path ribbon instead of leaving a visible grass/heather/wood seam at its
+// edges — pathsData.paths is generated above, so it's already in scope here.
+const PATH_TRACK_BUFFERS = Object.fromEntries(
+  Object.entries(CATEGORY_WIDTHS).map(([category, width]) => [category, width / 2 + 2]),
+);
+
+function nearAnyPath(point) {
+  return pathsData.paths.some(
+    (path) => distanceToPolyline(point, path.points) <= PATH_TRACK_BUFFERS[path.category],
+  );
 }
 
 function inEllipse(e, n, patch) {
@@ -181,6 +240,7 @@ function inHeatherBand(i, n) {
 function classifyPlaceholderCell(i, j) {
   const point = { e: i * cellSize, n: j * cellSize };
   if (distanceToRoute(point) <= trackBuffer) return 'track';
+  if (nearAnyPath(point)) return 'track';
   if (inEllipse(point.e, point.n, rockPatch)) return 'rock';
   if (woodPatches.some((patch) => inEllipse(point.e, point.n, patch))) return 'wood';
   if (inHeatherBand(i, point.n)) return 'heather';

@@ -1,8 +1,17 @@
 import * as THREE from 'three';
+import { routePointToWorld, buildRibbonArrays, finalizeRibbonGeometry, densifyPolyline } from './ribbonGeometry.js';
 
-// Floated well above the terrain so the route reads as an overhead trail marker
-// rather than a painted line on the ground — also keeps it clear of z-fighting.
-const ROUTE_HEIGHT_OFFSET = 1.5;
+export { routePointToWorld };
+
+// Slightly wider than PathsOverlay.js's PATH_STYLES.bridleway (1.8m) since this is the
+// hero route the camera follows. Vertex color multiplies the shared rocky texture, so
+// (as with HeightmapTerrain.js's neutral-white `grass` tint) it's kept light and warm
+// rather than a saturated painted-line green — a strong/cool tint would crush the
+// texture's own stone/gravel contrast down to a flat color and read as paint rather
+// than a well-trodden, lighter-worn strip of the same rocky ground. heightOffset sits
+// above every PATH_STYLES offset so the ridden route always renders visibly on top at
+// any junction/crossing with the surrounding network.
+const ROUTE_STYLE = { width: 2.2, color: 0xc9bb98, heightOffset: 0.16 };
 
 export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/routes/cutgate.json`) {
   const response = await fetch(url);
@@ -12,41 +21,30 @@ export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/route
   return response.json();
 }
 
-// Shared by buildRouteOverlay below and main.js's bike spawn point so the two never
-// drift apart on the e/n -> x/z conversion.
-export function routePointToWorld({ e, n }) {
-  return { x: e, z: -n };
-}
-
-// Purely decorative — renders the route as a subtle dashed trail on the
-// terrain. Not tied to any gameplay/checkpoint logic.
-export function buildRouteOverlay(routeData, terrain) {
+// Renders the ridden Cut Gate route as a ground-level rocky ribbon (same texture/
+// material as the surrounding paths network) — the surface the player actually rides
+// along, not a decorative overhead marker. Not tied to any gameplay/checkpoint logic.
+export function buildRouteOverlay(routeData, terrain, material) {
+  // Only x/z (from the e/n control points) matter for the curve's shape here — the
+  // ribbon's y comes from re-sampling terrain height at each densified point below, not
+  // from these control points, so y is left at 0.
   const points = routeData.points.map(({ e, n }) => {
     const { x, z } = routePointToWorld({ e, n });
-    const y = terrain.getHeightAt(x, z) + ROUTE_HEIGHT_OFFSET;
-    return new THREE.Vector3(x, y, z);
+    return new THREE.Vector3(x, 0, z);
   });
 
   const curve = new THREE.CatmullRomCurve3(points);
-  
-  // Extract points along the curve to form our line
+
+  // Densify so the ribbon follows the curve's smoothed shape, not the raw control
+  // polygon's straight segments between them.
   const curvePoints = curve.getPoints(points.length * 4);
-  const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
-  
-  // Green dashed line, echoing the public bridleway symbol on OS Explorer maps.
-  const material = new THREE.LineDashedMaterial({
-    color: 0x1a8f3c,
-    linewidth: 1, // Note: Most WebGL implementations enforce a max linewidth of 1
-    dashSize: 3.0,
-    gapSize: 3.0,
-    transparent: true,
-    opacity: 0.85
-  });
+  const ribbonPoints = curvePoints.map((p) => ({ e: p.x, n: -p.z }));
 
-  const line = new THREE.Line(geometry, material);
-  
-  // computeLineDistances is strictly required for LineDashedMaterial to render gaps!
-  line.computeLineDistances();
+  const arrays = { positions: [], colors: [], uvs: [], indices: [] };
+  buildRibbonArrays(densifyPolyline(ribbonPoints), terrain, ROUTE_STYLE, arrays);
 
-  return line;
+  const geometry = finalizeRibbonGeometry(arrays);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = 'route-cutgate';
+  return mesh;
 }
