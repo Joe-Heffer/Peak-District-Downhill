@@ -30,24 +30,29 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   await expect(page.locator('#minimap')).toBeVisible();
   await expect(page.locator('#stamina-bar-fill')).toHaveCSS('width', '140px'); // full stamina at spawn
 
-  // The credits text depends on whether any of the four baked datasets are still the
+  // The credits text depends on whether any of the five baked datasets are still the
   // synthetic placeholder — fetch them directly and derive the expected branch instead of
   // hardcoding one, so this stays correct whichever data is currently committed.
-  const [terrainData, routeData, landcoverData, pathsData] = await Promise.all([
+  const [terrainData, routeData, landcoverData, pathsData, treesData] = await Promise.all([
     request.get(new URL('data/terrain/cutgate.json', baseURL).href).then((r) => r.json()),
     request.get(new URL('data/routes/cutgate.json', baseURL).href).then((r) => r.json()),
     request
       .get(new URL('data/terrain/cutgate-landcover.json', baseURL).href)
       .then((r) => r.json()),
     request.get(new URL('data/routes/cutgate-paths.json', baseURL).href).then((r) => r.json()),
+    request.get(new URL('data/terrain/cutgate-trees.json', baseURL).href).then((r) => r.json()),
   ]);
   const isPlaceholder = Boolean(
-    terrainData.placeholder || routeData.placeholder || landcoverData.placeholder || pathsData.placeholder,
+    terrainData.placeholder ||
+      routeData.placeholder ||
+      landcoverData.placeholder ||
+      pathsData.placeholder ||
+      treesData.placeholder,
   );
 
   const credits = page.locator('#credits');
   if (isPlaceholder) {
-    await expect(credits).toContainText('Placeholder terrain/route/landcover/paths data');
+    await expect(credits).toContainText('Placeholder terrain/route/landcover/paths/trees data');
   } else {
     await expect(credits).toContainText('Environment Agency LIDAR');
   }

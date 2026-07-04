@@ -36,10 +36,15 @@ export const OVERPASS_USER_AGENT =
   'Peak-District-Downhill/1.0 (+https://github.com/Joe-Heffer/Peak-District-Downhill)';
 
 export const RAW_DIR = new URL('./raw/', import.meta.url);
+// DSM tiles live in their own subdirectory rather than alongside the DTM tiles in
+// RAW_DIR, since buildTrees.js (unlike buildTerrain.js) needs both rasters at once and
+// they'd otherwise be indistinguishable by filename alone.
+export const RAW_DSM_DIR = new URL('./raw/dsm/', import.meta.url);
 export const TERRAIN_OUT = new URL('../../public/data/terrain/cutgate.json', import.meta.url);
 export const ROUTE_OUT = new URL('../../public/data/routes/cutgate.json', import.meta.url);
 export const LANDCOVER_OUT = new URL('../../public/data/terrain/cutgate-landcover.json', import.meta.url);
 export const PATHS_OUT = new URL('../../public/data/routes/cutgate-paths.json', import.meta.url);
+export const TREES_OUT = new URL('../../public/data/terrain/cutgate-trees.json', import.meta.url);
 
 export const ATTRIBUTION = {
   terrain:
@@ -47,4 +52,8 @@ export const ATTRIBUTION = {
     '© Environment Agency copyright and/or database right. Derived from the LIDAR ' +
     'Composite Digital Terrain Model (DTM).',
   route: '© OpenStreetMap contributors, ODbL 1.0 (openstreetmap.org/copyright).',
+  trees:
+    'Contains public sector information licensed under the Open Government Licence v3.0. ' +
+    '© Environment Agency copyright and/or database right. Derived from the LIDAR ' +
+    'Composite Digital Surface Model (DSM) minus Composite Digital Terrain Model (DTM).',
 };
