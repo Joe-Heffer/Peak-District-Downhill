@@ -14,6 +14,7 @@ import { buildScenery } from './scenery/Scenery.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
+import { createScoreTracker } from './scoring/ScoreTracker.js';
 import { createDevTools } from './devtools/DevTools.js';
 import { buildFeedbackIssueUrl } from './feedback/FeedbackUrl.js';
 
@@ -83,6 +84,15 @@ function setUpMuteButton(musicAudio) {
   applyMuteState();
 }
 
+function spawnScorePopup(container, event) {
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `score-popup score-popup--${event.amount < 0 ? 'penalty' : 'bonus'}`;
+  el.textContent = event.label;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
 function setUpFeedbackButton() {
   const button = document.getElementById('feedback-btn');
   if (!button) return;
@@ -136,8 +146,13 @@ async function init() {
   const spawnPoint = routePointToWorld(routeData.points[0]);
   const locationEl = document.getElementById('location');
   const staminaFillEl = document.getElementById('stamina-bar-fill');
+  const scoreValueEl = document.getElementById('score-value');
+  const comboValueEl = document.getElementById('combo-value');
+  const scoreBestEl = document.getElementById('score-best');
+  const scorePopupsEl = document.getElementById('score-popups');
   updateLocation(locationEl, terrainData, routeData, spawnPoint.x, spawnPoint.z);
   const miniMap = createMiniMap(terrainData, routeData);
+  const scoreTracker = createScoreTracker();
 
   const { scene, camera, renderer, isNight } = setupScene();
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -150,7 +165,7 @@ async function init() {
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight);
-  devTools.attachGameState({ bike, world, scene, camera, terrain, terrainData, routeData });
+  devTools.attachGameState({ bike, world, scene, camera, terrain, terrainData, routeData, scoreTracker });
   const inputState = createInputController();
 
   window.addEventListener('keydown', resumeAudioOnGesture, { once: true });
@@ -182,6 +197,16 @@ async function init() {
 
       miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
       if (staminaFillEl) staminaFillEl.style.width = `${bike.stamina * 100}%`;
+
+      const landcoverClass = terrain.getLandcoverAt(bike.mesh.position.x, bike.mesh.position.z);
+      const scoreEvents = scoreTracker.update(dt, bike, landcoverClass);
+      if (scoreValueEl) scoreValueEl.textContent = Math.floor(scoreTracker.displayScore).toLocaleString();
+      if (scoreBestEl) scoreBestEl.textContent = `BEST ${Math.floor(scoreTracker.bestScore).toLocaleString()}`;
+      if (comboValueEl) {
+        comboValueEl.textContent =
+          scoreTracker.comboMultiplier > 1 ? `×${scoreTracker.comboMultiplier} COMBO` : '';
+      }
+      for (const event of scoreEvents) spawnScorePopup(scorePopupsEl, event);
 
       timeSinceLocationUpdate += dt;
       if (timeSinceLocationUpdate >= LOCATION_UPDATE_INTERVAL) {

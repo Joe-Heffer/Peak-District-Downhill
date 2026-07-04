@@ -177,10 +177,24 @@ export function createHeightLookup(terrainData) {
   };
 }
 
+// Nearest-cell landcover lookup — unlike height, class indices aren't numerically
+// interpolable, so this snaps to the containing cell rather than bilinear-blending.
+export function createLandcoverLookup(landcoverData) {
+  if (!landcoverData) return () => null;
+  const { cols, rows, cellSize, classes, landcover } = landcoverData;
+
+  return function getLandcoverAt(x, z) {
+    const i = clamp(Math.round(x / cellSize), 0, cols - 1);
+    const j = clamp(Math.round(-z / cellSize), 0, rows - 1);
+    return classes[landcover[i][j]];
+  };
+}
+
 export function createTerrain(terrainData, landcoverData, maxAnisotropy) {
   return {
     mesh: buildTerrainMesh(terrainData, landcoverData, maxAnisotropy),
     getHeightAt: createHeightLookup(terrainData),
+    getLandcoverAt: createLandcoverLookup(landcoverData),
     data: terrainData,
   };
 }

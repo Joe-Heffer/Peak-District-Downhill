@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMaxAnisotropy, clamp, createHeightLookup } from './HeightmapTerrain.js';
+import { applyMaxAnisotropy, clamp, createHeightLookup, createLandcoverLookup } from './HeightmapTerrain.js';
 
 const terrainData = {
   cols: 3,
@@ -9,6 +9,18 @@ const terrainData = {
     [0, 1, 2],
     [1, 2, 3],
     [2, 3, 4],
+  ],
+};
+
+const landcoverData = {
+  cols: 3,
+  rows: 3,
+  cellSize: 10,
+  classes: ['grass', 'rock', 'heather'],
+  landcover: [
+    [0, 1, 2],
+    [1, 2, 0],
+    [2, 0, 1],
   ],
 };
 
@@ -72,5 +84,41 @@ describe('createHeightLookup / getHeightAt', () => {
     const lastI = terrainData.cols - 1;
     const lastJ = terrainData.rows - 1;
     expect(getHeightAt(1e6, -1e6)).toBeCloseTo(terrainData.heights[lastI][lastJ]);
+  });
+});
+
+describe('createLandcoverLookup / getLandcoverAt', () => {
+  it('returns the exact class name at (i * cellSize, -j * cellSize)', () => {
+    const getLandcoverAt = createLandcoverLookup(landcoverData);
+
+    for (let i = 0; i < landcoverData.cols; i += 1) {
+      for (let j = 0; j < landcoverData.rows; j += 1) {
+        const x = i * landcoverData.cellSize;
+        const z = -j * landcoverData.cellSize;
+        const expectedClass = landcoverData.classes[landcoverData.landcover[i][j]];
+        expect(getLandcoverAt(x, z)).toBe(expectedClass);
+      }
+    }
+  });
+
+  it('snaps to the nearest cell rather than interpolating', () => {
+    const getLandcoverAt = createLandcoverLookup(landcoverData);
+    // Just past the midpoint between cell (0,0)="grass" and (1,0)="rock" — nearest is (1,0).
+    expect(getLandcoverAt(landcoverData.cellSize * 0.6, 0)).toBe('rock');
+  });
+
+  it('clamps out-of-bounds coordinates to the nearest edge', () => {
+    const getLandcoverAt = createLandcoverLookup(landcoverData);
+
+    expect(getLandcoverAt(-1000, 1000)).toBe(landcoverData.classes[landcoverData.landcover[0][0]]);
+
+    const lastI = landcoverData.cols - 1;
+    const lastJ = landcoverData.rows - 1;
+    expect(getLandcoverAt(1e6, -1e6)).toBe(landcoverData.classes[landcoverData.landcover[lastI][lastJ]]);
+  });
+
+  it('returns null unconditionally when no landcover data is provided', () => {
+    const getLandcoverAt = createLandcoverLookup(null);
+    expect(getLandcoverAt(0, 0)).toBeNull();
   });
 });

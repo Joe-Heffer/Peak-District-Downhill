@@ -199,6 +199,7 @@ export function createDevTools() {
     respawn: {
       run() {
         gameState.bike.respawn();
+        gameState.scoreTracker?.reset();
         console.log('Respawned at route start.');
       },
     },

@@ -74,6 +74,91 @@ html, body {
   transition: width 0.1s linear;
 }
 
+#hud-score {
+  /* top offset clears #hud-topleft's tallest realistic stack (wrapped credits line +
+     location pill + stamina bar) so the two never overlap even though this block is
+     horizontally centered and #hud-topleft can span up to 60vw from the left edge. */
+  position: fixed;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#score-value {
+  font-size: 28px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+#combo-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffcc33;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+#combo-value:empty {
+  display: none;
+}
+
+#score-best {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(20, 20, 20, 0.35);
+  border-radius: 4px;
+}
+
+#score-best:empty {
+  display: none;
+}
+
+#score-popups {
+  position: fixed;
+  top: 154px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.score-popup {
+  font-size: 16px;
+  font-weight: bold;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  animation: score-popup-rise 1s ease-out forwards;
+}
+
+.score-popup--bonus {
+  color: #6cc24a;
+}
+
+.score-popup--penalty {
+  color: #ff6b6b;
+}
+
+@keyframes score-popup-rise {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-40px);
+  }
+}
+
 #minimap {
   position: fixed;
   top: 52px;
