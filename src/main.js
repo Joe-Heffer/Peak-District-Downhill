@@ -172,6 +172,11 @@ async function init() {
     try {
       const dt = clock.getDelta();
 
+      if (inputState.reset) {
+        bike.respawn();
+        inputState.reset = false;
+      }
+
       const jumped = bike.applyInput(dt, inputState);
       world.step(1 / 60, dt, 10);
       bike.syncAfterStep(dt);

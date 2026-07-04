@@ -9,6 +9,7 @@ beforeEach(() => {
     <div id="brake-btn"></div>
     <div id="pedal-btn"></div>
     <div id="jump-btn"></div>
+    <div id="reset-btn"></div>
   `;
 });
 
@@ -86,6 +87,16 @@ describe('createInputController keyboard bindings', () => {
     dispatchKey('keyup', 'ArrowUp');
     expect(state.pedal).toBe(false);
   });
+
+  it('sets reset true on KeyR keydown, and keyup does not reset it (issue #66)', () => {
+    const state = createInputController();
+
+    dispatchKey('keydown', 'KeyR');
+    expect(state.reset).toBe(true);
+    dispatchKey('keyup', 'KeyR');
+    // Same edge-triggered pattern as jump — only the consumer clears it.
+    expect(state.reset).toBe(true);
+  });
 });
 
 describe('createInputController pointer zone bindings', () => {
@@ -132,5 +143,14 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.pedal).toBe(true);
     dispatchPointer('pedal-btn', 'pointerup');
     expect(state.pedal).toBe(false);
+  });
+
+  it('sets reset true on reset-btn pointerdown, and pointerup does not reset it (issue #66)', () => {
+    const state = createInputController();
+
+    dispatchPointer('reset-btn', 'pointerdown');
+    expect(state.reset).toBe(true);
+    dispatchPointer('reset-btn', 'pointerup');
+    expect(state.reset).toBe(true);
   });
 });

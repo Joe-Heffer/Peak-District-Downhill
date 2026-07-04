@@ -3,17 +3,120 @@ import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clamp } from '../terrain/HeightmapTerrain.js';
 
-const RADIUS = 0.5;
-const SPAWN_CLEARANCE = RADIUS + 0.05;
 const TURN_RATE = 2.2;
-const GROUNDED_EPSILON = 0.05;
 const HARD_LANDING_VELOCITY = -8;
 const CAMERA_OFFSET = new THREE.Vector3(0, 3, -6);
 const CAMERA_LERP = 0.1;
 
+// Physics (issue #66): a CANNON.RaycastVehicle chassis + wheels, replacing the old
+// velocity-hack CANNON.Sphere. A literal 2-wheel (front+rear, in-line) vehicle has no
+// lateral wheel separation, so nothing in cannon-es's suspension model resists roll —
+// the chassis would be a free rigid body in roll, tipping from any asymmetric bump or
+// off-camber landing. Two extra invisible "outrigger" wheels, mounted wide but at the
+// chassis's longitudinal center (so they add roll stability without adding unwanted
+// pitch resistance), give the vehicle a real 4-corner stance — the same track-width-
+// gives-roll-stiffness principle every 4-wheeled RaycastVehicle demo relies on — while
+// only the front/rear wheels drive perceived behaviour (steering/engine force/brake/
+// grounded state). There are no wheel meshes bound to physics wheel transforms in this
+// game (the visible mesh follows the chassis body only, see syncAfterStep), so the
+// outriggers are 100% invisible physics geometry. Suspension is bounded
+// (maxSuspensionTravel/maxSuspensionForce), so a hard enough landing or off-camber hit
+// can still exceed what the outriggers arrest and tip the chassis over for real —
+// deliberately no artificial roll cap or auto-recovery.
+const CHASSIS_HALF_EXTENTS = new CANNON.Vec3(0.3, 0.15, 0.55);
+const WHEEL_RADIUS = 0.33;
+// Chassis-local Z positions of the steering/engine wheels. NOTE: these are on the
+// physics chassis's own -Z side — see MESH_YAW_OFFSET below for why "front" ends up at
+// negative Z in chassis-local space while still rendering/steering/driving toward the
+// mesh's visual nose.
+const WHEEL_FRONT_Z = -0.45;
+const WHEEL_REAR_Z = 0.45;
+const OUTRIGGER_X = 0.55;
+const WHEEL_CONNECTION_Y = -CHASSIS_HALF_EXTENTS.y; // bottom face of the chassis box
+const SUSPENSION_REST_LENGTH = 0.15; // ~real MTB rear-shock travel
+// Chassis ride height at rest: half the chassis height, plus the suspension resting
+// length, plus the wheel radius — keeps the spawn/respawn/teleport height consistent
+// with where the vehicle's suspension will actually settle instead of guessing.
+const SPAWN_CLEARANCE = CHASSIS_HALF_EXTENTS.y + SUSPENSION_REST_LENGTH + WHEEL_RADIUS;
+const WHEELBASE = Math.abs(WHEEL_FRONT_Z - WHEEL_REAR_Z);
+const MAX_STEER_ANGLE = 0.6; // rad (~34 deg) — physical headset-angle ceiling
+
+const WHEEL_FRONT = 0;
+const WHEEL_REAR = 1;
+const WHEEL_OUTRIGGER_LEFT = 2;
+const WHEEL_OUTRIGGER_RIGHT = 3;
+const REAL_WHEELS = [WHEEL_FRONT, WHEEL_REAR];
+
+// cannon-es's RaycastVehicle derives each wheel's rolling-friction "forward" direction
+// as worldGroundNormal.cross(chassis-transformed directions[indexRightAxis]) — i.e. from
+// indexRightAxis/indexUpAxis alone (verified empirically; a wheel's own directionLocal/
+// axleLocal turn out not to matter). With indexUpAxis=1 (+Y, the only sane choice given
+// gravity/ground normal) and indexRightAxis restricted to the library's fixed positive
+// {X,Y,Z} basis, that cross product can only ever land on +/-Z or +/-X — +Z (this game's
+// forward=(sin(yaw),0,cos(yaw)) convention) is mathematically unreachable, so the chassis
+// always physically accelerates toward its own local -Z under positive engineForce.
+// Rather than fight the library (or renumber axis indices game-wide), the chassis is left
+// to propel itself toward local -Z natively (hence WHEEL_FRONT_Z/WHEEL_REAR_Z above being
+// negative/positive respectively), and the *visible* mesh is given a constant 180-degree
+// yaw offset relative to the chassis so it renders nose-first toward the actual direction
+// of travel — see syncAfterStep. yaw/slopeSin are likewise derived from the mesh's
+// effective forward (chassis local -Z), not the chassis's own local +Z.
+const MESH_YAW_OFFSET = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+
+// A perfectly vertical (0,-1,0) wheel raycast direction hits a real, confirmed edge case
+// in cannon-es's heightfield ray intersection (degenerate math for axis-aligned rays)
+// that silently reports no contact for a meaningful fraction of query points against
+// Cut Gate's real, non-square terrain grid — reproduced directly against both a minimal
+// heightfield and the real dataset. A slight tilt away from exactly vertical avoids it
+// (empirically cut the miss rate from ~19% to ~3% on top of the setupWorld.js dimension-
+// padding fix for the same underlying library limitation) without perceptibly changing
+// suspension behaviour.
+const WHEEL_DIRECTION_LOCAL = new CANNON.Vec3(0.001, -1, 0.001).unit();
+
+// Starting points from an empirical tuning spike (a throwaway Node script driving the
+// vehicle for several seconds and inspecting settle height / drift / wheel contact —
+// see the plan notes for issue #66), not derived physical constants. A first-principles
+// guess (~18) turned out far too soft: cannon-es's suspensionForce = stiffness *
+// compression * chassisMass, and holding this ~85kg chassis up within maxSuspensionTravel
+// needs stiffness well north of that. frictionSlip reuses GRIP_MU directly, so cornering
+// and drive/brake traction now share one friction-circle model.
+const REAL_WHEEL_OPTIONS = {
+  radius: WHEEL_RADIUS,
+  directionLocal: WHEEL_DIRECTION_LOCAL,
+  axleLocal: new CANNON.Vec3(1, 0, 0),
+  suspensionRestLength: SUSPENSION_REST_LENGTH,
+  maxSuspensionTravel: 0.15,
+  suspensionStiffness: 60,
+  dampingCompression: 12,
+  dampingRelaxation: 7,
+  maxSuspensionForce: 6000,
+  rollInfluence: 0.01,
+};
+// Outriggers: a lightly-loaded extra suspension corner (like real trainer wheels
+// resting with light preload), not a free-floating stabilizer — cannon-es's suspension
+// spring is linear, so there's no clean way to build a true dead-zone/hover behaviour
+// without extra per-frame code. Kept notably softer than the real wheels — the tuning
+// spike found that outrigger stiffness comparable to the real wheels actively fights
+// them for pitch balance (the real wheels alone should carry that), while a soft
+// preload still stops the vehicle rolling over sideways. Near-zero frictionSlip keeps
+// them from adding unaccounted drive/brake drag or fighting the real wheels' slip model.
+const OUTRIGGER_WHEEL_OPTIONS = {
+  radius: WHEEL_RADIUS,
+  directionLocal: WHEEL_DIRECTION_LOCAL,
+  axleLocal: new CANNON.Vec3(1, 0, 0),
+  suspensionRestLength: SUSPENSION_REST_LENGTH,
+  maxSuspensionTravel: 0.1,
+  suspensionStiffness: 12,
+  dampingCompression: 3,
+  dampingRelaxation: 2,
+  maxSuspensionForce: 3000,
+  frictionSlip: 0.05,
+  rollInfluence: 0.01,
+};
+
 // Headlight (see issue #79): mounted near the front/handlebar of the bike, aimed along
 // local +z (the forward axis — see createPlaceholderBikeModel's comment and
-// applyInput's forward vector below), only built when spawned into the night preset.
+// syncAfterStep's forward vector below), only built when spawned into the night preset.
 // Intensity is in candela (three.js has used physically-based photometric light units
 // since r155, mandatory since r165) and illuminance falls off as intensity/distance^2,
 // so this needs to be in the hundreds-to-low-thousands to read as a visible beam against
@@ -25,18 +128,21 @@ const HEADLIGHT_DISTANCE = 40;
 const HEADLIGHT_ANGLE = 0.5;
 const HEADLIGHT_PENUMBRA = 0.4;
 
-// Real-world-scale longitudinal dynamics: forward speed is a scalar driven each frame
-// by the slope sampled from the terrain (gravity along the grade), rolling resistance,
-// aerodynamic drag, and braking — not a fixed constant. See CLAUDE.md/plan notes for
-// the sourcing of these figures.
+// Real-world-scale longitudinal dynamics. Slope-induced acceleration now comes for free
+// from real gravity acting on wheels in raycast ground contact (no more forward-terrain-
+// sampling hack) — what's left as explicit forces is what CANNON.WheelInfo doesn't model:
+// aerodynamic drag and rolling resistance. See CLAUDE.md/plan notes for the sourcing of
+// these figures.
 const BIKE_MASS = 85; // kg — ~15kg trail/enduro bike + ~70kg rider
 const GRAVITY_MAG = 9.82; // m/s^2 — matches world gravity in setupWorld.js
 const ROLLING_RESISTANCE_COEFF = 0.025; // Crr — knobby MTB tyres on dirt/gravel
 const AIR_DENSITY = 1.225; // kg/m^3 — standard sea-level air density
 const DRAG_CDA = 0.6; // m^2 — crouched downhill riding position
+// Tyre traction ceiling, shared by cornering and drive/brake force via each real wheel's
+// WheelInfo.frictionSlip — a friction-circle model the old separate GRIP_MU/BRAKE_MU
+// scalars couldn't represent (skidding under hard braking mid-corner is now possible).
 const GRIP_MU = 0.8; // reuses setupWorld.js's ground/bike contact friction
-const BRAKE_MU = 0.5; // controlled-braking traction, below GRIP_MU (loose dirt, no lockup)
-const SLOPE_SAMPLE_DISTANCE = 1.0; // m — forward look-ahead for slope sampling
+const BRAKE_MU = 0.5; // brake-force-magnitude scalar, below GRIP_MU (loose dirt, no lockup)
 const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TURN_RATE
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
@@ -99,8 +205,8 @@ const MODEL_ROTATION_Y = 0;
 const gltfLoader = new GLTFLoader();
 
 // Two wheels + a frame, standing in for a real bike model. Built lying along local Z
-// (the body's forward axis, see applyInput's yaw-0 forward vector) so no extra mesh
-// rotation is needed beyond copying the physics body's yaw quaternion.
+// (the body's forward axis, see syncAfterStep's forward vector) so no extra mesh
+// rotation is needed beyond copying the physics body's quaternion.
 function createPlaceholderBikeModel() {
   const group = new THREE.Group();
   const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xdd4422 });
@@ -195,25 +301,62 @@ export class BikeController {
     const spawnY = terrain.getHeightAt(spawnPoint.x, spawnPoint.z) + SPAWN_CLEARANCE;
     this.body = new CANNON.Body({
       mass: BIKE_MASS,
-      shape: new CANNON.Sphere(RADIUS),
+      shape: new CANNON.Box(CHASSIS_HALF_EXTENTS),
       position: new CANNON.Vec3(spawnPoint.x, spawnY, spawnPoint.z),
-      linearDamping: 0.05,
+      // Both raised well above a token value by the tuning spike above: the 4-wheel
+      // suspension model has a small persistent asymmetry between sequentially-solved
+      // wheel impulses each step (a known characteristic of raycast-vehicle solvers,
+      // not specific to this tuning) that otherwise reads as gentle unwanted creep/
+      // wobble at rest — damping this aggressively keeps the vehicle settled and
+      // controllable without needing a hand-rolled velocity-zeroing hack.
+      linearDamping: 0.3,
+      angularDamping: 0.8,
       material: bikeMaterial,
-      // applyInput() unconditionally rewrites body.velocity every frame from its own
-      // speed/yaw model — it never relies on cannon-es's inertia to settle. Without
-      // this, resting at low speed for >1s (default sleepTimeLimit) puts the body to
-      // sleep, and Body.integrate() then ignores velocity writes on a sleeping body
-      // until something calls wakeUp(), so pedalling from a stop would silently do
-      // nothing to the bike's position even though speed/stamina still updated.
+      // applyInput() unconditionally rewrites engine force/steering/brake every frame
+      // from its own input model — it never relies on cannon-es's inertia to settle.
+      // Without this, resting at low speed for >1s (default sleepTimeLimit) puts the
+      // body to sleep, and Body.integrate() then ignores force writes on a sleeping
+      // body until something calls wakeUp(), so pedalling from a stop would silently
+      // do nothing even though speed/stamina still updated.
       allowSleep: false,
     });
-    // Heading is fully steering-controlled: applyInput() sets the body's orientation
-    // explicitly from `this.yaw` every frame. Locking all rotation axes (rather than
-    // just X/Z) stops ground-contact friction from also spinning the sphere collider
-    // around Y like a top, which would otherwise visibly rotate the bike model away
-    // from its steering heading.
-    this.body.angularFactor.set(0, 0, 0);
-    world.addBody(this.body);
+    // Rotation is fully free (issue #66): roll/pitch/yaw all emerge from wheel contact
+    // forces instead of being hand-set, so the bike can genuinely tip over — see the
+    // physics constants comment above for why the outrigger wheels exist and why no
+    // roll-correction torque is added here.
+    this.body.angularFactor.set(1, 1, 1);
+
+    this.vehicle = new CANNON.RaycastVehicle({
+      chassisBody: this.body,
+      // Matches this game's existing forward = (sin(yaw), 0, cos(yaw)) / "mesh built
+      // along local Z" convention (createPlaceholderBikeModel) — NOT cannon-es's own
+      // defaults (indexForwardAxis defaults to 0/X), so these must be passed explicitly.
+      indexRightAxis: 0,
+      indexForwardAxis: 2,
+      indexUpAxis: 1,
+    });
+    this.vehicle.addWheel({
+      ...REAL_WHEEL_OPTIONS,
+      frictionSlip: GRIP_MU,
+      chassisConnectionPointLocal: new CANNON.Vec3(0, WHEEL_CONNECTION_Y, WHEEL_FRONT_Z),
+    }); // WHEEL_FRONT
+    this.vehicle.addWheel({
+      ...REAL_WHEEL_OPTIONS,
+      frictionSlip: GRIP_MU,
+      chassisConnectionPointLocal: new CANNON.Vec3(0, WHEEL_CONNECTION_Y, WHEEL_REAR_Z),
+    }); // WHEEL_REAR
+    this.vehicle.addWheel({
+      ...OUTRIGGER_WHEEL_OPTIONS,
+      chassisConnectionPointLocal: new CANNON.Vec3(-OUTRIGGER_X, WHEEL_CONNECTION_Y, 0),
+    }); // WHEEL_OUTRIGGER_LEFT
+    this.vehicle.addWheel({
+      ...OUTRIGGER_WHEEL_OPTIONS,
+      chassisConnectionPointLocal: new CANNON.Vec3(OUTRIGGER_X, WHEEL_CONNECTION_Y, 0),
+    }); // WHEEL_OUTRIGGER_RIGHT
+    // addToWorld() adds the chassis body itself and registers the preStep listener that
+    // updates wheel raycasts/suspension/friction each world.step() — don't also call
+    // world.addBody(this.body).
+    this.vehicle.addToWorld(world);
   }
 
   async loadModel() {
@@ -232,13 +375,28 @@ export class BikeController {
     }
   }
 
-  // Admin command (see src/devtools/DevTools.js): resets the bike back to the exact
-  // state the constructor set it up in, for a "start the run over" dev/admin action.
+  // Zeroes engine force/brake/steering on the real wheels — used by respawn()/
+  // teleport() so a reset doesn't leave stale throttle/steering input applied to a
+  // freshly repositioned chassis.
+  resetVehicleControls() {
+    for (const wheelIndex of REAL_WHEELS) {
+      this.vehicle.applyEngineForce(0, wheelIndex);
+      this.vehicle.setBrake(0, wheelIndex);
+    }
+    this.vehicle.setSteeringValue(0, WHEEL_FRONT);
+  }
+
+  // Player-facing (issue #66) and admin command (see src/devtools/DevTools.js): resets
+  // the bike back to the exact state the constructor set it up in, for a "start the run
+  // over" action — including recovering from a full tip-over crash, since this game
+  // deliberately has no automatic upright-recovery.
   respawn() {
     const spawnY = this.terrain.getHeightAt(this.spawnPoint.x, this.spawnPoint.z) + SPAWN_CLEARANCE;
     this.body.position.set(this.spawnPoint.x, spawnY, this.spawnPoint.z);
     this.body.velocity.set(0, 0, 0);
+    this.body.angularVelocity.set(0, 0, 0);
     this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
+    this.resetVehicleControls();
     this.yaw = 0;
     this.speed = 0;
     this.stamina = MAX_STAMINA;
@@ -258,6 +416,8 @@ export class BikeController {
     const y = this.terrain.getHeightAt(x, z) + SPAWN_CLEARANCE;
     this.body.position.set(x, y, z);
     this.body.velocity.set(0, 0, 0);
+    this.body.angularVelocity.set(0, 0, 0);
+    this.resetVehicleControls();
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
@@ -268,16 +428,20 @@ export class BikeController {
     this.riderLandingAbsorb = 0;
   }
 
+  // Real wheels only — outriggers are stabilizer-only and don't count as "on the
+  // ground" for jump/tire-roll-audio purposes.
   isGrounded() {
-    const groundY = this.terrain.getHeightAt(this.body.position.x, this.body.position.z);
-    return this.body.position.y <= groundY + RADIUS + GROUNDED_EPSILON;
+    return REAL_WHEELS.some((wheelIndex) => this.vehicle.wheelInfos[wheelIndex].isInContact);
   }
 
   applyInput(dt, inputState) {
     // Sharper turns are only possible at low speed — the cap below derives the same
     // way a real bike's cornering does: lateral (centripetal) acceleration v*omega
     // can't exceed the available tyre grip (mu*g), so the faster you're going the
-    // less you can yank the bars before you'd wash out.
+    // less you can yank the bars before you'd wash out. Converted from a yaw-rate cap
+    // into a steering angle via a small bicycle-model relationship
+    // (yawRate ~= (speed/wheelbase) * tan(steerAngle)) so it's in the units
+    // RaycastVehicle actually wants, while preserving "sharper turns only at low speed".
     const turnCap =
       this.speed < TURN_RATE_MIN_SPEED
         ? TURN_RATE
@@ -288,37 +452,49 @@ export class BikeController {
     const digitalSteer = (inputState.steerLeft ? 1 : 0) - (inputState.steerRight ? 1 : 0);
     const analogSteer = clamp(typeof inputState.steerAmount === 'number' ? inputState.steerAmount : 0, -1, 1);
     const steerSignal = clamp(digitalSteer + analogSteer, -1, 1);
-    this.yaw += turnCap * dt * steerSignal;
+    const speedForSteer = Math.max(this.speed, TURN_RATE_MIN_SPEED);
+    const steerAngleMagnitude = clamp(Math.atan((turnCap * WHEELBASE) / speedForSteer), 0, MAX_STEER_ANGLE);
+    this.vehicle.setSteeringValue(steerAngleMagnitude * steerSignal, WHEEL_FRONT);
 
-    const forward = new CANNON.Vec3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-
-    const groundHere = this.terrain.getHeightAt(this.body.position.x, this.body.position.z);
-    const groundAhead = this.terrain.getHeightAt(
-      this.body.position.x + forward.x * SLOPE_SAMPLE_DISTANCE,
-      this.body.position.z + forward.z * SLOPE_SAMPLE_DISTANCE,
-    );
-    const drop = groundHere - groundAhead; // positive when descending
-    const slopeLength = Math.hypot(drop, SLOPE_SAMPLE_DISTANCE);
-    const sinSlope = drop / slopeLength;
-    const cosSlope = SLOPE_SAMPLE_DISTANCE / slopeLength;
-    this.slopeSin = sinSlope; // >0 descending, <0 climbing — read by updateRiderPose()
     this.pedalActive = Boolean(inputState.pedal);
     this.brakeActive = Boolean(inputState.brake);
 
-    const gravityAccel = GRAVITY_MAG * sinSlope;
-    const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
-    const dragAccel = (0.5 * AIR_DENSITY * DRAG_CDA * this.speed * this.speed) / BIKE_MASS;
-    const brakeAccel = inputState.brake ? BRAKE_MU * GRAVITY_MAG * cosSlope : 0;
+    // Propulsion/braking as real forces at the wheels rather than a scalar speed update
+    // — slope-induced acceleration now comes for free from gravity + wheel ground
+    // contact, so there's no forward-terrain-sampling hack here any more.
     const pedalAccel = inputState.pedal
       ? this.stamina > 0
         ? PEDAL_BURST_ACCEL
         : PEDAL_STEADY_ACCEL
       : 0;
-    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel + pedalAccel;
-    this.speed = clamp(this.speed + netAccel * dt, 0, MAX_SPEED);
+    this.vehicle.applyEngineForce(pedalAccel * BIKE_MASS, WHEEL_REAR);
+
+    const brakeForce = inputState.brake ? BRAKE_MU * BIKE_MASS * GRAVITY_MAG : 0;
+    for (const wheelIndex of REAL_WHEELS) {
+      this.vehicle.setBrake(brakeForce, wheelIndex);
+    }
+
+    // Aerodynamic drag and rolling resistance aren't part of CANNON.WheelInfo's
+    // friction/suspension model, so they stay explicit forces applied to the chassis.
+    const horizontalSpeed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
+    if (horizontalSpeed > 1e-3) {
+      const dragForceMag = 0.5 * AIR_DENSITY * DRAG_CDA * horizontalSpeed * horizontalSpeed;
+      const rollingResistForceMag = ROLLING_RESISTANCE_COEFF * BIKE_MASS * GRAVITY_MAG;
+      const oppositionForceMag = dragForceMag + rollingResistForceMag;
+      this.body.applyForce(
+        new CANNON.Vec3(
+          -(this.body.velocity.x / horizontalSpeed) * oppositionForceMag,
+          0,
+          -(this.body.velocity.z / horizontalSpeed) * oppositionForceMag,
+        ),
+      );
+    }
 
     // Keyed on the raw input (not whether stamina was actually available to spend) so
     // holding pedal at 0 stamina keeps it pinned at 0 instead of immediately regenerating.
+    // Note this reads `this.speed` from the *previous* step (speed is now re-derived in
+    // syncAfterStep, one frame after the forces above are integrated) rather than a
+    // just-updated value — a one-frame-stale read that's immaterial at a ~1/60s dt.
     if (inputState.pedal) {
       this.stamina = clamp(this.stamina - STAMINA_DRAIN_RATE * dt, 0, MAX_STAMINA);
     } else {
@@ -329,12 +505,10 @@ export class BikeController {
       this.stamina = clamp(this.stamina + regenRate * dt, 0, MAX_STAMINA);
     }
 
-    this.body.velocity.x = forward.x * this.speed;
-    this.body.velocity.z = forward.z * this.speed;
-    this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.yaw);
-
     let jumped = false;
     if (inputState.jump && this.isGrounded()) {
+      // Applied at the chassis's own center of mass (this.body.position) so the impulse
+      // can't induce an unwanted spin now that rotation is free.
       this.body.applyImpulse(
         new CANNON.Vec3(0, JUMP_LAUNCH_VELOCITY * BIKE_MASS, 0),
         this.body.position,
@@ -346,6 +520,28 @@ export class BikeController {
   }
 
   syncAfterStep(dt = 1 / 60) {
+    // Defensive ceiling for artifact-steep terrain cells, applied to the real chassis
+    // velocity rather than a scalar (see MAX_SPEED's original comment).
+    const rawHorizontalSpeed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
+    if (rawHorizontalSpeed > MAX_SPEED) {
+      const scale = MAX_SPEED / rawHorizontalSpeed;
+      this.body.velocity.x *= scale;
+      this.body.velocity.z *= scale;
+    }
+
+    // yaw/speed/slopeSin are re-derived from the real chassis state (emergent from
+    // physics) rather than hand-set, now that steering/propulsion drive the vehicle
+    // through real forces instead of overwriting velocity/orientation directly. Uses
+    // local -Z (see MESH_YAW_OFFSET above) — the chassis's actual direction of travel,
+    // not its own local +Z.
+    const forward = this.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
+    this.yaw = Math.atan2(forward.x, forward.z);
+    this.speed = Math.min(rawHorizontalSpeed, MAX_SPEED);
+    // Descending means moving downhill along `forward`, i.e. forward pointing downward
+    // (negative y) — hence the negation to match the />0 descending, <0 climbing/
+    // contract updateRiderPose() (and its tests) rely on.
+    this.slopeSin = clamp(-forward.y, -1, 1);
+
     // Hard-landing heuristic: was airborne last frame, is grounded now, and was
     // falling fast just before this step's collision response resolved it.
     const nowGrounded = this.isGrounded();
@@ -357,7 +553,11 @@ export class BikeController {
     this.updateRiderPose(dt);
 
     this.mesh.position.copy(this.body.position);
+    // See MESH_YAW_OFFSET above: the chassis physically travels toward its own local -Z,
+    // so the visible mesh gets an extra 180-degree yaw on top to render nose-first
+    // toward the actual direction of travel.
     this.mesh.quaternion.copy(this.body.quaternion);
+    this.mesh.quaternion.multiply(MESH_YAW_OFFSET);
 
     this.updateCamera();
   }
