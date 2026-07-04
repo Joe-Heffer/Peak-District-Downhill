@@ -36,3 +36,28 @@ describe('setupWorld', () => {
     expect(world.bodies).toContain(groundBody);
   });
 });
+
+describe('setupWorld heightfield AABB fix (issue #148)', () => {
+  it("builds each cell's AABB from the min/max of all four corners, not just the diagonal pair", () => {
+    // A "twisted" cell: the diagonal corners (h00, h11) are both 0, but the
+    // off-diagonal corners (h10, h01) are both 10 — cannon-es's own
+    // Heightfield.getAabbAtIndex would report a bogus [0, 0] z-range here (see
+    // setupWorld.js's patchHeightfieldAabbBug comment), silently excluding most of
+    // the cell's real surface height from ray-vs-terrain broad-phase checks.
+    const twistedTerrain = {
+      cellSize: 5,
+      heights: [
+        [0, 10],
+        [10, 0],
+      ],
+    };
+    const { groundBody } = setupWorld(twistedTerrain);
+    const shape = groundBody.shapes[0];
+
+    const aabb = { lowerBound: new CANNON.Vec3(), upperBound: new CANNON.Vec3() };
+    shape.getAabbAtIndex(0, 0, aabb);
+
+    expect(aabb.lowerBound.z).toBe(0);
+    expect(aabb.upperBound.z).toBe(10);
+  });
+});

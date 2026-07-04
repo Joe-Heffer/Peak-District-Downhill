@@ -19,6 +19,32 @@ function padHeightsToSquare(heights) {
   return padded;
 }
 
+// A second, distinct cannon-es Heightfield bug (issue #148): Heightfield.getAabbAtIndex
+// builds each cell's broad-phase AABB from only the two DIAGONAL corners
+// (data[xi][yi] and data[xi+1][yi+1]), not the min/max across all four corners. For a
+// "twisted" cell — where the two off-diagonal corners (data[xi+1][yi]/data[xi][yi+1])
+// stray far from that diagonal pair, which real, non-flat LIDAR terrain has plenty of —
+// the resulting AABB can entirely exclude the real surface height, so
+// Ray._intersectHeightfield's aabb.overlapsRay(localRay) check silently rejects rays
+// that should hit. A long ray's own bounding box is wide enough to overlap the (wrong)
+// cell AABB anyway, masking the bug, but a RaycastVehicle wheel's short suspension ray
+// (~0.5m) has no such margin — confirmed directly against Cut Gate's real terrain: the
+// route's spawn cell has a ~6m diagonal split (corners 88.4/90.9/92.5/94.7), and every
+// wheel's raycast missed there, leaving the bike permanently ungrounded from frame one.
+// Overriding just this shape instance's method (not cannon-es's shared prototype) keeps
+// the workaround scoped to this game's own heightfield.
+function patchHeightfieldAabbBug(heightfieldShape) {
+  heightfieldShape.getAabbAtIndex = function (xi, yi, { lowerBound, upperBound }) {
+    const { data, elementSize } = this;
+    const h00 = data[xi][yi];
+    const h10 = data[xi + 1][yi];
+    const h01 = data[xi][yi + 1];
+    const h11 = data[xi + 1][yi + 1];
+    lowerBound.set(xi * elementSize, yi * elementSize, Math.min(h00, h10, h01, h11));
+    upperBound.set((xi + 1) * elementSize, (yi + 1) * elementSize, Math.max(h00, h10, h01, h11));
+  };
+}
+
 // CANNON.Heightfield indexes its `data[i][j]` matrix with i -> shape-local x, j ->
 // shape-local y, and the stored value -> shape-local z. Rotating -90 deg about X (the
 // same rotation the old flat CANNON.Plane ground used) maps local (x, y, z) to world
@@ -36,6 +62,7 @@ export function setupWorld(terrainData) {
   const heightfieldShape = new CANNON.Heightfield(padHeightsToSquare(terrainData.heights), {
     elementSize: terrainData.cellSize,
   });
+  patchHeightfieldAabbBug(heightfieldShape);
   const groundMaterial = new CANNON.Material('ground');
   const groundBody = new CANNON.Body({ mass: 0, material: groundMaterial });
   groundBody.addShape(heightfieldShape);
