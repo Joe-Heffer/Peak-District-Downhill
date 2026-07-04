@@ -147,6 +147,23 @@ const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TU
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
 
+// Stuck-contact recovery (issue #148): even with setupWorld.js's Heightfield AABB fix,
+// a wheel's raycast is only ~0.5m long (suspensionRestLength + radius), and real,
+// non-flat LIDAR terrain can still occasionally put a wheel's connection point out of
+// that reach — e.g. resting on the chassis's own CANNON.Box shape rather than its
+// wheels on a locally steep/twisted cell, which leaves every WheelInfo permanently
+// isInContact === false and the bike frozen (this is what made Cut Gate's real spawn
+// point unplayable before the AABB fix, and nothing guarantees no other cell on the
+// route has an equally bad twist). Rather than chase every possible terrain edge case,
+// detect the physically-impossible symptom directly: no real wheel grounded for a
+// sustained stretch while the chassis is nonetheless barely moving (a genuine fall or
+// jump keeps accelerating under gravity, so speed only dips this low for a fraction of
+// a second near a jump's apex — never for the full STUCK_UNGROUNDED_TIME below) and
+// nudge the chassis back onto the terrain height lookup, which isn't subject to the
+// same raycast limitation.
+const STUCK_UNGROUNDED_TIME = 0.5; // s of continuous ungrounded-and-slow before recovering
+const STUCK_MAX_SPEED = 1; // m/s — total (not just vertical) chassis speed
+
 // Baseline propulsion + boost (issue #139): this is a downhill game, so momentum should
 // mostly come from gravity/terrain, not a held button. The old "hold to pedal or crawl
 // to a stop" model is replaced by (a) a small always-on baseline push (below) that keeps
@@ -281,6 +298,7 @@ export class BikeController {
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
+    this.stuckTimer = 0;
 
     this.spawnPoint = { x: spawnPoint.x, z: spawnPoint.z };
 
@@ -420,6 +438,7 @@ export class BikeController {
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
+    this.stuckTimer = 0;
     this.slopeSin = 0;
     this.boostActive = false;
     this.brakeActive = false;
@@ -438,11 +457,30 @@ export class BikeController {
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
+    this.stuckTimer = 0;
     this.slopeSin = 0;
     this.boostActive = false;
     this.brakeActive = false;
     this.riderPoseFactor = 0;
     this.riderLandingAbsorb = 0;
+  }
+
+  // Re-grounds the chassis at its current (x, z) via the terrain height lookup rather
+  // than the wheel raycasts — see STUCK_UNGROUNDED_TIME's comment above for why the
+  // raycasts can't always be trusted to recover on their own. Keeps current yaw (unlike
+  // respawn()'s full reset to spawn) since this is a transparent safety-net nudge, not a
+  // player-visible restart.
+  recoverFromStuckContact() {
+    const groundY = this.terrain.getHeightAt(this.body.position.x, this.body.position.z) + SPAWN_CLEARANCE;
+    this.body.position.y = groundY;
+    this.body.velocity.set(0, 0, 0);
+    this.body.angularVelocity.set(0, 0, 0);
+    this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.yaw);
+    this.resetVehicleControls();
+    this.wasGrounded = true;
+    this.previousVerticalVelocity = 0;
+    this.hardLanding = false;
+    this.stuckTimer = 0;
   }
 
   // Real wheels only — outriggers are stabilizer-only and don't count as "on the
@@ -565,6 +603,18 @@ export class BikeController {
       !this.wasGrounded && nowGrounded && this.previousVerticalVelocity < HARD_LANDING_VELOCITY;
     this.wasGrounded = nowGrounded;
     this.previousVerticalVelocity = this.body.velocity.y;
+
+    // Stuck-contact recovery (issue #148) — see STUCK_UNGROUNDED_TIME's comment above.
+    // Real motion (a jump, a fall) keeps accelerating under gravity, so only a genuine
+    // raycast-miss freeze holds both conditions for the full threshold.
+    if (nowGrounded || this.body.velocity.length() > STUCK_MAX_SPEED) {
+      this.stuckTimer = 0;
+    } else {
+      this.stuckTimer += dt;
+      if (this.stuckTimer > STUCK_UNGROUNDED_TIME) {
+        this.recoverFromStuckContact();
+      }
+    }
 
     this.updateRiderPose(dt);
 

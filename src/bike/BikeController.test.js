@@ -1,8 +1,12 @@
+import fs from 'fs';
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BikeController } from './BikeController.js';
+import { setupWorld } from '../physics/setupWorld.js';
+import { createHeightLookup } from '../terrain/HeightmapTerrain.js';
+import { routePointToWorld } from '../routes/RouteOverlay.js';
 
 // Mirrors BikeController.js's own physics constants (issue #66's RaycastVehicle rework)
 // so these tests can compute expected values without importing module-private consts.
@@ -15,6 +19,7 @@ const TURN_RATE_MIN_SPEED = 0.5;
 const WHEELBASE = 0.9;
 const MAX_STEER_ANGLE = 0.6;
 const JUMP_LAUNCH_VELOCITY = 7;
+const STUCK_UNGROUNDED_TIME = 0.5;
 const BIKE_MASS = 85;
 const BASELINE_ACCEL = 2.0;
 const BOOST_ACCEL = 3.0;
@@ -75,6 +80,39 @@ describe('BikeController.isGrounded', () => {
     bike.body.position.y = 100;
     world.step(dt);
     expect(bike.isGrounded()).toBe(false);
+  });
+});
+
+describe('BikeController grounding on the real Cut Gate terrain (issue #148 regression)', () => {
+  it('gets at least one real wheel into contact within a couple of seconds of spawning at the real route start', () => {
+    // Regression test for issue #148: the bike was permanently stuck at spawn because
+    // no wheel's raycast ever found the real, non-placeholder Cut Gate heightfield at
+    // the route's actual first point — a locally steep/"twisted" terrain cell that a
+    // synthetic stub terrain (used by every other test in this file) can't reproduce.
+    const terrainData = JSON.parse(
+      fs.readFileSync(new URL('../../public/data/terrain/cutgate.json', import.meta.url)),
+    );
+    const routeData = JSON.parse(
+      fs.readFileSync(new URL('../../public/data/routes/cutgate.json', import.meta.url)),
+    );
+    const realTerrain = { getHeightAt: createHeightLookup(terrainData) };
+    const { world: realWorld, bikeMaterial } = setupWorld(terrainData);
+    const spawnPoint = routePointToWorld(routeData.points[0]);
+
+    const bike = new BikeController(scene, realWorld, camera, realTerrain, spawnPoint, bikeMaterial);
+    const dt = 1 / 60;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
+
+    let groundedWithinBudget = false;
+    for (let i = 0; i < 150 && !groundedWithinBudget; i += 1) {
+      bike.applyInput(dt, input);
+      realWorld.step(dt);
+      if (bike.vehicle.wheelInfos.some((wheel) => wheel.isInContact)) {
+        groundedWithinBudget = true;
+      }
+    }
+
+    expect(groundedWithinBudget).toBe(true);
   });
 });
 
@@ -502,6 +540,32 @@ describe('BikeController.syncAfterStep', () => {
     ).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
     expect(bike.mesh.quaternion.y).toBeCloseTo(expectedQuaternion.y);
     expect(bike.mesh.quaternion.w).toBeCloseTo(expectedQuaternion.w);
+  });
+});
+
+describe('BikeController stuck-contact recovery (issue #148)', () => {
+  it('re-grounds the chassis via the terrain height lookup after being ungrounded and slow for too long', () => {
+    const bike = createBike({ x: 5, z: -5 });
+    bike.body.position.set(5, 50, -5); // high above ground, no wheel ever in contact
+    bike.body.velocity.set(0, 0, 0); // stays below STUCK_MAX_SPEED the whole time
+    const dt = 1 / 60;
+    const stepsPastThreshold = Math.ceil(STUCK_UNGROUNDED_TIME / dt) + 1;
+
+    for (let i = 0; i < stepsPastThreshold; i += 1) bike.syncAfterStep(dt);
+
+    expect(bike.body.position.y).toBeCloseTo(SPAWN_CLEARANCE); // terrain.getHeightAt stub returns 0
+    expect(bike.stuckTimer).toBe(0);
+  });
+
+  it('does not recover while genuinely moving fast, even if ungrounded for the same duration', () => {
+    const bike = createBike({ x: 5, z: -5 });
+    bike.body.position.set(5, 50, -5);
+    bike.body.velocity.set(0, -5, 0); // a real fall, well above STUCK_MAX_SPEED
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 40; i += 1) bike.syncAfterStep(dt);
+
+    expect(bike.body.position.y).toBeCloseTo(50); // untouched — no false-positive recovery
   });
 });
 
