@@ -5,6 +5,7 @@ export function createInputController() {
     jump: false,
     brake: false,
     pedal: false,
+    reset: false,
     steerAmount: 0, // continuous -1..1 signal, written externally by TiltController
   };
 
@@ -14,6 +15,9 @@ export function createInputController() {
   bindPointerZone('pedal-btn', (pressed) => (state.pedal = pressed));
   bindPointerZone('jump-btn', (pressed) => {
     if (pressed) state.jump = true;
+  });
+  bindPointerZone('reset-btn', (pressed) => {
+    if (pressed) state.reset = true;
   });
 
   window.addEventListener('keydown', (event) => handleKey(event, true));
@@ -39,6 +43,9 @@ export function createInputController() {
         break;
       case 'Space':
         if (pressed) state.jump = true;
+        break;
+      case 'KeyR':
+        if (pressed) state.reset = true;
         break;
       default:
         break;
