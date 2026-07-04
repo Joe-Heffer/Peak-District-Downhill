@@ -22,45 +22,49 @@ html, body {
   display: block;
 }
 
-#credits {
+#hud-topleft {
   position: fixed;
   top: 8px;
   left: 8px;
-  padding: 4px 8px;
   max-width: 60vw;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#credits {
+  padding: 4px 8px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(20, 20, 20, 0.35);
   border-radius: 4px;
-  pointer-events: none;
-  z-index: 2;
+}
+
+#credits:empty {
+  display: none;
 }
 
 #location {
-  position: fixed;
-  top: 32px;
-  left: 8px;
   padding: 4px 8px;
-  max-width: 60vw;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.85);
   background: rgba(20, 20, 20, 0.35);
   border-radius: 4px;
-  pointer-events: none;
-  z-index: 2;
+}
+
+#location:empty {
+  display: none;
 }
 
 #stamina-bar {
-  position: fixed;
-  top: 56px;
-  left: 8px;
   width: 140px;
   height: 10px;
   border-radius: 5px;
   background: rgba(20, 20, 20, 0.35);
   overflow: hidden;
-  pointer-events: none;
-  z-index: 2;
 }
 
 #stamina-bar-fill {
