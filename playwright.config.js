@@ -10,6 +10,12 @@ const baseURL = `http://localhost:4173${BASE_PATH}`;
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
+  // Each test boots a full WebGL scene + physics world + audio decode/synth — on the
+  // 2-vCPU GitHub Actions runner, 2 parallel workers contend for CPU badly enough that
+  // async init() (particularly audio setup) can miss a test's click-listener retry
+  // window, e.g. the mute/feedback button tests. Serialize in CI to remove that
+  // contention; keep default (CPU-count-based) parallelism locally where it's fine.
+  workers: process.env.CI ? 1 : undefined,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
