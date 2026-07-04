@@ -149,6 +149,9 @@ vite.config.ts.timestamp-*
 # Manually-downloaded raw terrain source tiles (see tools/terrain/README.md)
 tools/terrain/raw/*
 !tools/terrain/raw/.gitkeep
+!tools/terrain/raw/dsm/
+tools/terrain/raw/dsm/*
+!tools/terrain/raw/dsm/.gitkeep
 
 # Playwright
 playwright-report/

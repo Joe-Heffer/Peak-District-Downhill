@@ -29,11 +29,11 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 ## Structure
 
 - `index.html` — page shell, loads `src/main.js` as a module script.
-- `src/main.js` — async `init()`: loads baked terrain/route/landcover JSON, then wires
-  up the scene, physics world, bike, and input, then runs the render/physics tick loop.
-  Also spawns the bike at `routeData.points[0]` and renders the in-game credits/notice
-  text (into `#credits`): a placeholder-data warning when terrain, route, or landcover
-  data has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
+- `src/main.js` — async `init()`: loads baked terrain/route/landcover/trees JSON, then
+  wires up the scene, physics world, bike, and input, then runs the render/physics tick
+  loop. Also spawns the bike at `routeData.points[0]` and renders the in-game
+  credits/notice text (into `#credits`): a placeholder-data warning when any of those
+  datasets has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
 - `src/scene/setupScene.js` — Three.js scene, camera, renderer, lighting. Does not build
   any ground mesh itself — `main.js` adds the loaded terrain mesh.
 - `src/physics/setupWorld.js` — cannon-es world and a `CANNON.Heightfield` ground body
@@ -49,6 +49,10 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
   decorative trail line on the terrain. `RouteOverlay.js` itself has no gameplay
   coupling, but `main.js` does use the route's first point (via the shared
   `routePointToWorld` helper) to place the bike's spawn.
+- `src/scenery/Scenery.js` — purely decorative `InstancedMesh` trees + rocks. Trees are
+  placed at real positions/heights from `public/data/terrain/cutgate-trees.json`
+  (LIDAR-derived canopy data, see below), not randomly — only rocks are still a seeded
+  random scatter within the route corridor.
 - `vite.config.js` — sets `base` to `/Peak-District-Downhill/` under GitHub Actions
   (GitHub Pages subpath), `/` otherwise. Runtime `fetch()` calls for terrain/route data
   must build their URL from `import.meta.env.BASE_URL`, not a hardcoded leading slash,
@@ -59,13 +63,20 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 The game currently models one real location: Cut Gate, a Peak District bridleway
 descent. `tools/terrain/` is a dev-only, rerunnable Node pipeline (`npm run
 terrain:build`) that turns Environment Agency LIDAR elevation data and OpenStreetMap
-route/landcover data into the three baked JSON files under `public/data/` that the app
-fetches at runtime — see `tools/terrain/README.md` for the manual LIDAR download step
-and how to rerun it. The pipeline relies on the `geotiff` devDependency to parse LIDAR
-GeoTIFF tiles and `proj4` to reproject OSM's WGS84 coordinates into British National
-Grid. `public/data/**/*.json` are committed generated artifacts, like a lockfile;
-until real source data has been processed they hold a synthetic placeholder (`npm run
+route/landcover data into baked JSON files under `public/data/` that the app fetches at
+runtime — see `tools/terrain/README.md` for the manual LIDAR download step and how to
+rerun it. The pipeline relies on the `geotiff` devDependency to parse LIDAR GeoTIFF
+tiles and `proj4` to reproject OSM's WGS84 coordinates into British National Grid.
+`public/data/**/*.json` are committed generated artifacts, like a lockfile; until real
+source data has been processed they hold a synthetic placeholder (`npm run
 terrain:placeholder`), clearly marked via a `placeholder: true` field.
+
+`public/data/terrain/cutgate-trees.json` (real tree positions/heights, consumed by
+`src/scenery/Scenery.js`) is a separate, optional pipeline step — `npm run
+terrain:trees` (`tools/terrain/buildTrees.js`) — derived from a canopy height model
+(LIDAR Composite DSM minus DTM). Not part of `npm run terrain:build` since it needs a
+second manually-downloaded raster (the DSM) beyond the DTM the rest of the pipeline
+already requires; see `tools/terrain/README.md` step 5.
 
 The terrain mesh (`src/terrain/HeightmapTerrain.js`) and the physics heightfield
 (`src/physics/setupWorld.js`) are built from the exact same `heights[i][j]` array with a
@@ -75,10 +86,12 @@ change one side's indexing/rotation without updating the other to match.
 
 ## Tests
 
-- Unit tests (Vitest) are colocated as `src/**/*.test.js` next to the module they cover
-  — e.g. `src/terrain/HeightmapTerrain.test.js`, `src/physics/setupWorld.test.js`,
-  `src/routes/RouteOverlay.test.js`, `src/input/InputController.test.js` (runs under
-  jsdom via a `// @vitest-environment jsdom` docblock), `src/bike/BikeController.test.js`.
+- Unit tests (Vitest) are colocated as `src/**/*.test.js`/`tools/**/*.test.js` next to
+  the module they cover — e.g. `src/terrain/HeightmapTerrain.test.js`,
+  `src/physics/setupWorld.test.js`, `src/routes/RouteOverlay.test.js`,
+  `src/scenery/Scenery.test.js`, `src/input/InputController.test.js` (runs under jsdom
+  via a `// @vitest-environment jsdom` docblock), `src/bike/BikeController.test.js`,
+  `tools/terrain/pathClassification.test.js`, `tools/terrain/treeDetection.test.js`.
   Most run under Vitest's default `node` environment using real `three`/`cannon-es`
   objects with a stub `terrain`, no DOM needed.
 - The e2e smoke test (`e2e/smoke.spec.js`, Playwright) boots `vite preview` and checks

@@ -6,6 +6,7 @@ import { createInputController } from './input/InputController.js';
 import { createTiltController, isTiltSupported } from './input/TiltController.js';
 import { loadTerrainData } from './terrain/loadTerrainData.js';
 import { loadLandcoverData } from './terrain/loadLandcoverData.js';
+import { loadTreesData } from './terrain/loadTreesData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { createRockTrackMaterial } from './terrain/RockTrackTexture.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
@@ -32,18 +33,24 @@ function resumeAudioOnGesture() {
 
 const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
 
-function renderCredits(terrainData, routeData, landcoverData, pathsData) {
+function renderCredits(terrainData, routeData, landcoverData, pathsData, treesData) {
   const el = document.getElementById('credits');
   if (!el) return;
 
-  if (terrainData.placeholder || routeData.placeholder || landcoverData.placeholder || pathsData.placeholder) {
+  if (
+    terrainData.placeholder ||
+    routeData.placeholder ||
+    landcoverData.placeholder ||
+    pathsData.placeholder ||
+    treesData.placeholder
+  ) {
     el.textContent =
-      `Placeholder terrain/route/landcover/paths data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
+      `Placeholder terrain/route/landcover/paths/trees data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
   el.textContent =
-    `Terrain: Environment Agency LIDAR (OGL) · Route, paths & landcover: OpenStreetMap contributors (ODbL) · ${BIKE_MODEL_CREDIT}`;
+    `Terrain: Environment Agency LIDAR (OGL) · Route, paths & landcover: OpenStreetMap contributors (ODbL) · Trees: Environment Agency LIDAR (OGL) · ${BIKE_MODEL_CREDIT}`;
 }
 
 // Placeholder terrain has no real grid origin to convert from, and placeholder route
@@ -125,13 +132,14 @@ function setUpTiltButton(inputState) {
 async function init() {
   const devTools = createDevTools();
 
-  const [terrainData, routeData, landcoverData, pathsData] = await Promise.all([
+  const [terrainData, routeData, landcoverData, pathsData, treesData] = await Promise.all([
     loadTerrainData(),
     loadRouteData(),
     loadLandcoverData(),
     loadPathsData(),
+    loadTreesData(),
   ]);
-  renderCredits(terrainData, routeData, landcoverData, pathsData);
+  renderCredits(terrainData, routeData, landcoverData, pathsData, treesData);
 
   const spawnPoint = routePointToWorld(routeData.points[0]);
   const locationEl = document.getElementById('location');
@@ -146,7 +154,7 @@ async function init() {
   const rockTrackMaterial = createRockTrackMaterial(maxAnisotropy);
   scene.add(buildPathsOverlay(pathsData, terrain, rockTrackMaterial));
   scene.add(buildRouteOverlay(routeData, terrain, rockTrackMaterial));
-  scene.add(buildScenery(routeData, terrain));
+  scene.add(buildScenery(routeData, treesData, terrain));
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight);

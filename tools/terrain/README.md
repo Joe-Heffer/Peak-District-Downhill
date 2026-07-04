@@ -3,9 +3,10 @@
 Dev-only Node scripts (not part of the shipped browser bundle) that turn real UK open
 geodata into the small baked JSON files the game loads at runtime
 (`public/data/terrain/cutgate.json`, `public/data/routes/cutgate.json`,
-`public/data/terrain/cutgate-landcover.json`, `public/data/routes/cutgate-paths.json`).
-Covers a single location for now: Cut Gate, the Peak District bridleway descent from
-Margery Hill down to the Upper Derwent Visitor Centre.
+`public/data/terrain/cutgate-landcover.json`, `public/data/routes/cutgate-paths.json`,
+`public/data/terrain/cutgate-trees.json`). Covers a single location for now: Cut Gate,
+the Peak District bridleway descent from Margery Hill down to the Upper Derwent Visitor
+Centre.
 
 ## 1. Terrain — Environment Agency LIDAR
 
@@ -103,11 +104,37 @@ Same license as Route/Landcover above (it's the same OSM/ODbL source).
 npm run terrain:build
 ```
 
+## 5. Trees — LIDAR canopy height model (optional)
+
+Places individual trees (`src/scenery/Scenery.js`) at real positions/heights instead of
+scattering them randomly along the route, by deriving a canopy height model from LIDAR —
+see issue #50. Reuses the same DTM tile(s) from step 1, plus a **second**, separately
+downloaded raster:
+
+1. Download the **LIDAR Composite DSM** (surface model — includes vegetation/buildings,
+   unlike the DTM) tile(s) covering `BNG_BBOX`, the same way as step 1's DTM download.
+2. Put the downloaded tile(s) in `tools/terrain/raw/dsm/` (gitignored, separate from the
+   DTM tiles in `tools/terrain/raw/` so the two rasters aren't confused with each other).
+3. Run:
+   ```bash
+   npm run terrain:trees
+   ```
+   This computes `nDSM = DSM - DTM` over a finer grid than the terrain heights grid
+   (individual tree crowns are only a few metres across), finds local canopy apexes
+   (`tools/terrain/treeDetection.js`) above a minimum height and separation, and writes
+   `public/data/terrain/cutgate-trees.json`.
+
+Kept as its own optional step (not part of `npm run terrain:build`) since DSM coverage
+on the EA portal is patchier than DTM coverage in some upland areas — the rest of the
+pipeline should keep working even where DSM tiles for this bbox aren't available yet.
+
+Same license as Terrain above (it's the same EA/OGL source).
+
 ## Placeholder data
 
 `public/data/**/*.json` are generated artifacts checked into git (like a lockfile) so
-the app runs without anyone having to fetch real data first. Until the four steps above
-have been run with real source data, those files are a synthetic placeholder (see
+the app runs without anyone having to fetch real data first. Until the steps above have
+been run with real source data, those files are a synthetic placeholder (see
 `generatePlaceholder.js`) — clearly marked with `"placeholder": true` and a notice in
 their `source`/`license` fields, and flagged in the in-game credits overlay. Regenerate
 the placeholder with:
@@ -120,6 +147,6 @@ npm run terrain:placeholder
 
 The Environment Agency LIDAR portal is a browser download UI, not a stable
 unauthenticated REST endpoint suitable for scripting — selecting the area and downloading
-the tile(s) (steps 1-2 above) is a manual, one-time step, even though
-`generateAoiShapefile.js` can produce the area-of-interest upload for you. Everything else
-is scriptable and rerunnable.
+the tile(s) (steps 1-2 above, and step 5's DSM download) is a manual, one-time step, even
+though `generateAoiShapefile.js` can produce the area-of-interest upload for you.
+Everything else is scriptable and rerunnable.

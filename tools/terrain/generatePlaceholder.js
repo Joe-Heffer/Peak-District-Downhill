@@ -15,8 +15,10 @@ import {
   ROUTE_OUT,
   LANDCOVER_OUT,
   PATHS_OUT,
+  TREES_OUT,
 } from './config.js';
 import { PATH_CATEGORIES, clipPolylineToBbox } from './pathClassification.js';
+import { estimateCanopyRadius } from './treeDetection.js';
 
 const LANDCOVER_CLASSES = ['grass', 'wood', 'rock', 'heather', 'track'];
 
@@ -272,15 +274,63 @@ const landcoverData = {
   license: PLACEHOLDER_NOTICE,
 };
 
+// Placeholder trees are scattered only inside the synthetic woodPatches above (matching
+// the real nDSM-derived pipeline's "trees only where there's real canopy" property,
+// rather than woodland-agnostic random scatter) on a jittered lattice, using the same
+// deterministic sin/cos idiom as the rest of this script — no Math.random(). Canopy
+// radius reuses estimateCanopyRadius from treeDetection.js so placeholder and real trees
+// size the same way.
+const TREE_LATTICE_SPACING = 10; // metres between candidate lattice points within a wood patch
+const TREE_HEIGHT_MIN = 5;
+const TREE_HEIGHT_MAX = 18;
+
+const trees = [];
+let treeSeed = 0;
+for (const patch of woodPatches) {
+  const steps = Math.round((patch.radius * 2) / TREE_LATTICE_SPACING);
+  for (let a = 0; a <= steps; a += 1) {
+    for (let b = 0; b <= steps; b += 1) {
+      const e = patch.e - patch.radius + a * TREE_LATTICE_SPACING;
+      const n = patch.n - patch.radius + b * TREE_LATTICE_SPACING;
+      if (Math.hypot(e - patch.e, n - patch.n) > patch.radius) continue;
+
+      treeSeed += 1;
+      const jitterE = Math.sin(treeSeed * 12.9898) * (TREE_LATTICE_SPACING * 0.35);
+      const jitterN = Math.cos(treeSeed * 78.233) * (TREE_LATTICE_SPACING * 0.35);
+      const heightFraction = Math.sin(treeSeed * 4.71) * 0.5 + 0.5;
+      const height = TREE_HEIGHT_MIN + heightFraction * (TREE_HEIGHT_MAX - TREE_HEIGHT_MIN);
+
+      trees.push({
+        e: e + jitterE,
+        n: n + jitterN,
+        height: Math.round(height * 10) / 10,
+        radius: Math.round(estimateCanopyRadius(height) * 10) / 10,
+      });
+    }
+  }
+}
+
+const treesData = {
+  placeholder: true,
+  crs: 'EPSG:27700',
+  origin: LOCAL_ORIGIN,
+  source: PLACEHOLDER_NOTICE,
+  license: PLACEHOLDER_NOTICE,
+  trees,
+};
+
 mkdirSync(dirname(fileURLToPath(TERRAIN_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(ROUTE_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(PATHS_OUT)), { recursive: true });
+mkdirSync(dirname(fileURLToPath(TREES_OUT)), { recursive: true });
 writeFileSync(TERRAIN_OUT, JSON.stringify(terrainData));
 writeFileSync(ROUTE_OUT, JSON.stringify(routeData));
 writeFileSync(LANDCOVER_OUT, JSON.stringify(landcoverData));
 writeFileSync(PATHS_OUT, JSON.stringify(pathsData));
+writeFileSync(TREES_OUT, JSON.stringify(treesData));
 
 console.log(`Wrote placeholder terrain (${cols}x${rows} @ ${cellSize}m) and route (${routePoints.length} points).`);
 console.log('Landcover class histogram:', landcoverHistogram);
 console.log(`Wrote placeholder paths (${pathsData.paths.length} segments).`);
+console.log(`Wrote placeholder trees (${trees.length} trees).`);
 console.log('Reminder: this is synthetic placeholder data, not real Cut Gate topology.');
