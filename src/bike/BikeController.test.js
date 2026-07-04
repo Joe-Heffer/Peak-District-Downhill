@@ -126,11 +126,11 @@ describe('BikeController.applyInput', () => {
     }
   });
 
-  it('climbs a steep uphill grade while pedalling (regression: Cut Gate\'s real route has climbs up to ~19% grade)', () => {
+  it('climbs a steep uphill grade while boosting with stamina available', () => {
     const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z }; // ~19% ascending grade in +z
     const bike = createBike();
     bike.terrain = steepUphillTerrain;
-    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
     const dt = 1 / 60;
 
     let previousSpeed = bike.speed;
@@ -141,22 +141,35 @@ describe('BikeController.applyInput', () => {
     }
   });
 
-  it('still stalls on an unrealistically extreme grade even while pedalling', () => {
-    const extremeUphillTerrain = { getHeightAt: (x, z) => 0.4 * z }; // 40% ascending grade in +z
+  it('still stalls on an unrealistically extreme grade even at full boost', () => {
+    const extremeUphillTerrain = { getHeightAt: (x, z) => 0.6 * z }; // 60% ascending grade in +z
     const bike = createBike();
     bike.terrain = extremeUphillTerrain;
     bike.speed = 2;
-    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
 
     bike.applyInput(1 / 60, input);
     expect(bike.speed).toBeLessThan(2);
   });
 
-  it('decelerates on flat ground from rolling resistance and drag alone', () => {
+  it('decelerates on flat ground above the baseline cruise speed with no input', () => {
     const bike = createBike();
-    bike.speed = 8;
+    bike.speed = 8; // above the ~5 m/s baseline cruise equilibrium
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false });
     expect(bike.speed).toBeLessThan(8);
+  });
+
+  it('does not bleed down to a crawl on flat ground with no input (baseline cruise)', () => {
+    const bike = createBike();
+    bike.speed = 1; // well below the ~5 m/s baseline cruise equilibrium
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false };
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 60; i += 1) {
+      bike.applyInput(dt, input);
+    }
+
+    expect(bike.speed).toBeGreaterThan(1);
   });
 
   it('brakes to a lower speed than coasting over the same step', () => {
@@ -198,11 +211,11 @@ describe('BikeController.applyInput', () => {
     expect(airborneInput.jump).toBe(false);
   });
 
-  it('keeps moving under pedal input after sitting idle long enough to fall asleep (regression)', () => {
+  it('keeps moving under boost input after sitting idle long enough to fall asleep (regression)', () => {
     // Mirrors setupWorld.js's real config: with world.allowSleep on and the default
     // 1s sleepTimeLimit, a body resting below the speed threshold falls fully
     // asleep, and cannon-es then ignores velocity writes on it until something
-    // calls wakeUp() — silently freezing the bike in place despite pedal input.
+    // calls wakeUp() — silently freezing the bike in place despite boost input.
     const sleepyWorld = new CANNON.World();
     sleepyWorld.allowSleep = true;
     const bike = new BikeController(scene, sleepyWorld, camera, terrain, { x: 0, z: 0 });
@@ -212,15 +225,15 @@ describe('BikeController.applyInput', () => {
       sleepyWorld.step(dt); // idle for 1.5s, well past the default 1s sleepTimeLimit
     }
 
-    const pedalInput = {
+    const boostInput = {
       steerLeft: false,
       steerRight: false,
       jump: false,
       brake: false,
-      pedal: true,
+      boost: true,
     };
     for (let i = 0; i < 30; i += 1) {
-      bike.applyInput(dt, pedalInput);
+      bike.applyInput(dt, boostInput);
       sleepyWorld.step(dt);
     }
 
@@ -235,111 +248,110 @@ describe('BikeController stamina', () => {
     expect(bike.stamina).toBe(1);
   });
 
-  it('accelerates on flat ground while pedalling with stamina available', () => {
+  it('accelerates on flat ground while boosting with stamina available', () => {
     const bike = createBike();
     bike.speed = 3;
-    bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
+    bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
     expect(bike.speed).toBeGreaterThan(3);
   });
 
-  it('drains while pedalling and regenerates while coasting', () => {
+  it('drains while boosting and regenerates while coasting', () => {
     const bike = createBike();
-    const pedalInput = {
+    const boostInput = {
       steerLeft: false,
       steerRight: false,
       jump: false,
       brake: false,
-      pedal: true,
+      boost: true,
     };
 
-    bike.applyInput(1, pedalInput);
+    bike.applyInput(1, boostInput);
     expect(bike.stamina).toBeLessThan(1);
 
-    const staminaAfterPedalling = bike.stamina;
-    bike.applyInput(1, { ...pedalInput, pedal: false });
-    expect(bike.stamina).toBeGreaterThan(staminaAfterPedalling);
+    const staminaAfterBoosting = bike.stamina;
+    bike.applyInput(1, { ...boostInput, boost: false });
+    expect(bike.stamina).toBeGreaterThan(staminaAfterBoosting);
   });
 
-  it('does not drain below 0 while pedal is held', () => {
+  it('does not drain below 0 while boost is held', () => {
     const bike = createBike();
     bike.stamina = 0;
     bike.speed = 3;
 
-    bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
+    bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
     expect(bike.stamina).toBe(0);
   });
 
-  it('pedalling with empty stamina applies the weaker steady accel instead of zero propulsion', () => {
-    const bike = createBike();
-    bike.stamina = 0;
-    bike.speed = 3;
+  it('boosting with empty stamina gives no extra propulsion beyond the baseline cruise', () => {
+    const boostedBike = createBike();
+    boostedBike.stamina = 0;
+    boostedBike.speed = 3;
+    boostedBike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
 
-    bike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true });
-    expect(bike.speed).toBeGreaterThan(3); // steady accel still beats rolling resistance/drag
+    const coastingBike = createBike();
+    coastingBike.stamina = 0;
+    coastingBike.speed = 3;
+    coastingBike.applyInput(1, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false });
+
+    expect(boostedBike.speed).toBeCloseTo(coastingBike.speed);
   });
 
-  it('applies less propulsion at 0 stamina (steady rate) than at full stamina (burst rate)', () => {
-    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+  it('applies extra propulsion at full stamina but none once stamina is empty', () => {
+    const boostInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
 
-    const burstBike = createBike();
-    burstBike.speed = 3;
-    burstBike.applyInput(1, pedalInput);
+    const fullStaminaBike = createBike();
+    fullStaminaBike.speed = 3;
+    fullStaminaBike.applyInput(1, boostInput);
 
-    const steadyBike = createBike();
-    steadyBike.stamina = 0;
-    steadyBike.speed = 3;
-    steadyBike.applyInput(1, pedalInput);
+    const emptyStaminaBike = createBike();
+    emptyStaminaBike.stamina = 0;
+    emptyStaminaBike.speed = 3;
+    emptyStaminaBike.applyInput(1, boostInput);
 
-    expect(steadyBike.speed).toBeGreaterThan(3);
-    expect(steadyBike.speed).toBeLessThan(burstBike.speed);
+    expect(fullStaminaBike.speed).toBeGreaterThan(emptyStaminaBike.speed);
   });
 
-  it('keeps climbing a realistic steep grade at the steady rate once stamina is empty (low-gear regression)', () => {
-    // Real bikes have low ("granny") gearing precisely so a rider can keep grinding up a
-    // steep grade forever once winded, just slowly — pedalling should never fully stall
-    // out on Cut Gate's real climbs (up to ~19% grade) just because stamina ran out.
+  it('does not sustain a climb up a steep grade once stamina is empty (hill-climbing is out of scope for boost, issue #139)', () => {
     const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z };
     const bike = createBike();
     bike.terrain = steepUphillTerrain;
     bike.stamina = 0;
-    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
     const dt = 1 / 60;
 
-    let previousSpeed = bike.speed;
     for (let i = 0; i < 60; i += 1) {
       bike.applyInput(dt, input);
-      expect(bike.speed).toBeGreaterThan(previousSpeed);
-      expect(bike.stamina).toBe(0); // steady rate must not need any stamina to keep working
-      previousSpeed = bike.speed;
     }
+
+    expect(bike.speed).toBe(0); // clamped at 0 — baseline cruise alone can't hold this grade
   });
 
-  it('keeps stamina pinned at 0 while holding pedal at the steady rate, and only regenerates once released', () => {
-    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+  it('keeps stamina pinned at 0 while holding boost with none left, and only regenerates once released', () => {
+    const boostInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
     const bike = createBike();
     bike.stamina = 0;
 
-    bike.applyInput(1, pedalInput);
+    bike.applyInput(1, boostInput);
     expect(bike.stamina).toBe(0);
 
-    bike.applyInput(1, { ...pedalInput, pedal: false });
+    bike.applyInput(1, { ...boostInput, boost: false });
     expect(bike.stamina).toBeGreaterThan(0);
   });
 
-  it('drains over the new, longer burst duration rather than the old ~6s one', () => {
+  it('drains over a short ~3s burst duration, not a sustained-use one', () => {
     const bike = createBike();
-    const pedalInput = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const boostInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
 
-    bike.applyInput(6, pedalInput); // old ~6s full-drain duration
-    expect(bike.stamina).toBeGreaterThan(0); // must not be empty yet under the new tuning
+    bike.applyInput(2, boostInput); // 2s in, under the ~3s full-drain duration
+    expect(bike.stamina).toBeGreaterThan(0); // must not be empty yet
 
-    bike.applyInput(9, pedalInput); // total 15s, matching STAMINA_DRAIN_RATE = 1/15
-    expect(bike.stamina).toBe(0);
+    bike.applyInput(1, boostInput); // total 3s, matching BOOST_DRAIN_RATE = 1/3
+    expect(bike.stamina).toBeCloseTo(0);
   });
 
   it('does not regenerate above MAX_STAMINA', () => {
     const bike = createBike();
-    bike.applyInput(10, { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: false });
+    bike.applyInput(10, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false });
     expect(bike.stamina).toBe(1);
   });
 
@@ -352,7 +364,7 @@ describe('BikeController stamina', () => {
       steerRight: false,
       jump: false,
       brake: false,
-      pedal: false,
+      boost: false,
     });
 
     const restingBike = createBike();
@@ -363,7 +375,7 @@ describe('BikeController stamina', () => {
       steerRight: false,
       jump: false,
       brake: true,
-      pedal: false,
+      boost: false,
     });
 
     expect(restingBike.stamina).toBeGreaterThan(coastingBike.stamina);
@@ -425,10 +437,10 @@ describe('BikeController rider pose (issue #126)', () => {
     expect(bike.riderPivot.position.z).toBe(0);
   });
 
-  it('blends toward a seated, forward-leaning pose on a realistic uphill grade while pedalling', () => {
+  it('blends toward a seated, forward-leaning pose on a realistic uphill grade while boosting', () => {
     const bike = createBike();
     bike.slopeSin = -0.2; // climbing
-    bike.pedalActive = true;
+    bike.boostActive = true;
     bike.speed = 2;
 
     for (let i = 0; i < 120; i += 1) {
@@ -491,7 +503,7 @@ describe('BikeController rider pose (issue #126)', () => {
     expect(bike.riderPoseFactor).toBeGreaterThan(0);
   });
 
-  it('high speed alone (no pedal/brake) nudges the pose toward attack', () => {
+  it('high speed alone (no boost/brake) nudges the pose toward attack', () => {
     const bike = createBike();
     bike.speed = 15;
 
@@ -524,11 +536,11 @@ describe('BikeController rider pose (issue #126)', () => {
     expect(Number.isFinite(bike.riderPoseFactor)).toBe(true);
   });
 
-  it('applyInput stashes slope/pedal/brake state that syncAfterStep then feeds into the pose', () => {
+  it('applyInput stashes slope/boost/brake state that syncAfterStep then feeds into the pose', () => {
     const steepUphillTerrain = { getHeightAt: (x, z) => 0.19 * z };
     const bike = createBike();
     bike.terrain = steepUphillTerrain;
-    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, pedal: true };
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
     const dt = 1 / 60;
 
     for (let i = 0; i < 120; i += 1) {

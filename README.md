@@ -25,12 +25,14 @@ issue](https://github.com/Joe-Heffer/Peak-District-Downhill/issues)).
 | --- | --- | --- |
 | Steer left | `←` / `A` | Left zone |
 | Steer right | `→` / `D` | Right zone |
-| Pedal | `W` / `↑` | Pedal button |
+| Boost | `W` / `↑` | Boost button |
 | Brake | `↓` / `S` | Brake button |
 | Jump | `Space` | Jump button |
 
-Pedalling draws down a stamina bar (shown top-left); once it's empty the bike
-settles into a slower, sustainable pedal rate until stamina recovers.
+Gravity and the terrain carry the bike along on their own — boost is a short,
+strong burst of extra speed to fire on demand, most useful just before a jump to
+clear a bigger gap. It draws down a stamina bar (shown top-left); once it's
+empty, boosting does nothing until stamina recovers by coasting or braking.
 
 Other controls: the speaker icon (top-right) mutes/unmutes the music, and
 `` ` `` (backquote) toggles the dev-tools panel (stats, log console, and admin

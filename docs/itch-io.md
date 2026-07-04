@@ -82,13 +82,13 @@ and the concept-art crops to upload for each field — they're saved under
 > the game currently models Cut Gate, a classic Peak District descent — using real elevation
 > and trail data (Environment Agency LIDAR, OpenStreetMap). Built with Three.js and cannon-es.
 >
-> Controls: arrow keys/WASD to steer, pedal and brake, space/up to jump. Touch controls are
+> Controls: arrow keys/WASD to steer, boost and brake, space/up to jump. Touch controls are
 > available on mobile.
 >
 > **This is an early playtesting build** — the game is still in active development ahead of a
 > 1.0 release. We'd love feedback on:
 > - **Framerate/performance** on your device
-> - **Controls** — do steering, pedalling, braking and jumping feel responsive and fair?
+> - **Controls** — do steering, boosting, braking and jumping feel responsive and fair?
 > - **Route feel** — does the descent feel like a real trail? Too easy, too hard, too long/short?
 > - **Bugs** — anything that crashes, clips through terrain, or otherwise looks/feels broken
 >
@@ -106,7 +106,7 @@ and the concept-art crops to upload for each field — they're saved under
 >
 > We're specifically looking for feedback on:
 > - **Framerate** — does it run smoothly on your machine/browser?
-> - **Controls** — steering, pedalling, braking, and jumping should feel tight and readable
+> - **Controls** — steering, boosting, braking, and jumping should feel tight and readable
 > - **Route feel** — does the trail feel authentic, and is the difficulty right?
 > - **Bugs** — terrain clipping, physics glitches, audio issues, anything else broken
 >

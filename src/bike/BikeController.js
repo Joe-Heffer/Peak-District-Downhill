@@ -41,38 +41,35 @@ const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TU
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
 
-// Pedalling (issue #61): stamina is a unitless 0..1 fraction, not an absolute energy
-// unit. Drain/regen rates are tuned by feel like the drag/rolling-resistance figures
-// above, not derived from real rider physiology.
+// Baseline cruise (issue #139): a small always-on forward effort standing in for
+// effortless freewheeling/light pedalling, so the bike doesn't bleed down to a crawl on
+// flat ground when the player isn't touching any input — downhill sections don't need it
+// (gravity already dominates there), it only matters where slope alone can't carry the
+// bike. Sized to exactly balance rolling resistance + aero drag at a modest ~5 m/s
+// (~18 km/h) flat-ground cruise: ROLLING_RESISTANCE_COEFF*GRAVITY_MAG (0.2455) +
+// 0.5*AIR_DENSITY*DRAG_CDA*5^2/BIKE_MASS (~0.108) ≈ 0.35. Above that equilibrium speed drag
+// grows and pulls it back down; below it, this term wins and speeds the bike back up.
+const BASE_CRUISE_ACCEL = 0.35;
+
+// Boost (issue #139, replacing the old hold-to-pedal mechanic from #61): stamina is a
+// unitless 0..1 fraction, not an absolute energy unit. The player fires a short, strong
+// burst of extra speed on demand — most usefully just before a jump — rather than holding
+// a button continuously just to keep moving.
 const MAX_STAMINA = 1;
-const STAMINA_DRAIN_RATE = 1 / 15; // per second — full tank drains in ~15s of continuous pedalling
+// Full tank drains in ~3s of continuous boost — deliberately short so it reads as a
+// spendable burst, not a second baseline-propulsion button.
+const BOOST_DRAIN_RATE = 1 / 3;
 const STAMINA_REGEN_RATE = 1 / 10; // per second while coasting — full regen in ~10s
 const STAMINA_REGEN_RATE_RESTING = 1 / 5; // per second while braking/near-stationary — faster
 const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting" for regen
-// m/s^2 — rider effort acceleration while pedalling with stamina left. Must comfortably
-// clear GRAVITY_MAG * sinSlope + rolling resistance on real uphill grades, or pedalling
-// does nothing on a climb no matter how long it's held. Cut Gate's real route (see
-// public/data/routes/cutgate.json sampled against public/data/terrain/cutgate.json) has
-// uphill segments up to ~19% grade; 3.0 clears that with margin (theoretical stall grade
-// ~28-29%), whereas the previous 1.2 stalled out above ~10.7% grade — most of the route's
-// climbs (issue: "pedal mode ... can't go uphill").
-const PEDAL_BURST_ACCEL = 3.0;
-// m/s^2 — weaker, stamina-free effort applied once the burst tank above is empty but the
-// player keeps holding pedal, so pedalling never drops straight to zero propulsion (issue:
-// stamina "should allow a quick burst but then... roll along or... pedal at a steady
-// rate"). Modelled as a bike's low ("granny") gear: real low gearing sacrifices speed for
-// torque so a rider can keep grinding up a steep grade indefinitely, just slowly, without
-// needing to stand up and sprint. Stalls out around ~24.8% grade (vs. the burst rate's
-// ~28-29%), comfortably above Cut Gate's real climbs of up to ~19% grade, so pedalling
-// never actually stops working uphill once stamina runs low — it just gets a lot slower
-// (issue: "real mountain bikes have quite low gearing so it's possible to get up rather
-// steep inclines (if slowly)"). On flat ground it still clears rolling resistance +
-// aero drag easily, settling to a lower equilibrium cruise than the burst rate.
-const PEDAL_STEADY_ACCEL = 2.6;
+// m/s^2 — strong burst acceleration while boosting with stamina left, on top of the
+// baseline cruise above. Tuned to be clearly noticeable over a couple of seconds so it
+// visibly adds speed heading into a jump.
+const BOOST_ACCEL = 4.5;
 
 // Rider pose (issue #126): blends a seated "climbing" pose and a low "attack
 // position" descending pose via a single -1..+1 pose factor (see
-// updateRiderPose()), driven by slope/speed/pedal/brake rather than a fixed
+// updateRiderPose()), driven by slope/speed/boost/brake rather than a fixed
 // static mesh.
 const RIDER_POSE_BLEND_RATE = 4; // 1/s exponential approach — ~63% there after 0.25s
 const RIDER_SLOPE_DEADZONE = 0.05; // sinSlope magnitude (~5% grade) below which
@@ -80,7 +77,7 @@ const RIDER_SLOPE_DEADZONE = 0.05; // sinSlope magnitude (~5% grade) below which
 const RIDER_SLOPE_FULL_EFFECT = 0.35; // sinSlope magnitude (~35% grade) for full effect
 const RIDER_ATTACK_SPEED_THRESHOLD = 4; // m/s — fast coasting alone nudges toward attack
 const RIDER_ATTACK_SPEED_RANGE = 6; // m/s — range over which that ramps to full weight
-const RIDER_PEDAL_SEATED_WEIGHT = 0.4; // pull toward climb/seated while pedalling
+const RIDER_BOOST_SEATED_WEIGHT = 0.4; // pull toward climb/seated while boosting
 const RIDER_BRAKE_ATTACK_WEIGHT = 0.3; // pull toward attack/braced while braking
 const RIDER_MAX_TORSO_PITCH_CLIMB = 0.35; // rad (~20°) forward lean, full climb pose
 const RIDER_MAX_TORSO_PITCH_DESCEND = -0.55; // rad (~-31°) back lean, full attack pose
@@ -172,7 +169,7 @@ export class BikeController {
     this.riderPoseFactor = 0; // -1 climb/seated .. 0 neutral .. +1 descend/attack
     this.riderLandingAbsorb = 0; // 0..1, decays after a hard landing
     this.slopeSin = 0; // mirrors applyInput's local sinSlope
-    this.pedalActive = false;
+    this.boostActive = false;
     this.brakeActive = false;
 
     // Day/night is fixed for the whole session (no live day/night cycle), so this is
@@ -203,7 +200,7 @@ export class BikeController {
       // speed/yaw model — it never relies on cannon-es's inertia to settle. Without
       // this, resting at low speed for >1s (default sleepTimeLimit) puts the body to
       // sleep, and Body.integrate() then ignores velocity writes on a sleeping body
-      // until something calls wakeUp(), so pedalling from a stop would silently do
+      // until something calls wakeUp(), so boosting from a stop would silently do
       // nothing to the bike's position even though speed/stamina still updated.
       allowSleep: false,
     });
@@ -246,7 +243,7 @@ export class BikeController {
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
     this.slopeSin = 0;
-    this.pedalActive = false;
+    this.boostActive = false;
     this.brakeActive = false;
     this.riderPoseFactor = 0;
     this.riderLandingAbsorb = 0;
@@ -262,7 +259,7 @@ export class BikeController {
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
     this.slopeSin = 0;
-    this.pedalActive = false;
+    this.boostActive = false;
     this.brakeActive = false;
     this.riderPoseFactor = 0;
     this.riderLandingAbsorb = 0;
@@ -302,25 +299,23 @@ export class BikeController {
     const sinSlope = drop / slopeLength;
     const cosSlope = SLOPE_SAMPLE_DISTANCE / slopeLength;
     this.slopeSin = sinSlope; // >0 descending, <0 climbing — read by updateRiderPose()
-    this.pedalActive = Boolean(inputState.pedal);
+    this.boostActive = Boolean(inputState.boost);
     this.brakeActive = Boolean(inputState.brake);
 
     const gravityAccel = GRAVITY_MAG * sinSlope;
     const rollingResistAccel = ROLLING_RESISTANCE_COEFF * GRAVITY_MAG * cosSlope;
     const dragAccel = (0.5 * AIR_DENSITY * DRAG_CDA * this.speed * this.speed) / BIKE_MASS;
     const brakeAccel = inputState.brake ? BRAKE_MU * GRAVITY_MAG * cosSlope : 0;
-    const pedalAccel = inputState.pedal
-      ? this.stamina > 0
-        ? PEDAL_BURST_ACCEL
-        : PEDAL_STEADY_ACCEL
-      : 0;
-    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel + pedalAccel;
+    // No baseline cruise while braking — the player is deliberately shedding speed.
+    const cruiseAccel = inputState.brake ? 0 : BASE_CRUISE_ACCEL;
+    const boostAccel = inputState.boost && this.stamina > 0 ? BOOST_ACCEL : 0;
+    const netAccel = gravityAccel - rollingResistAccel - dragAccel - brakeAccel + cruiseAccel + boostAccel;
     this.speed = clamp(this.speed + netAccel * dt, 0, MAX_SPEED);
 
     // Keyed on the raw input (not whether stamina was actually available to spend) so
-    // holding pedal at 0 stamina keeps it pinned at 0 instead of immediately regenerating.
-    if (inputState.pedal) {
-      this.stamina = clamp(this.stamina - STAMINA_DRAIN_RATE * dt, 0, MAX_STAMINA);
+    // holding boost at 0 stamina keeps it pinned at 0 instead of immediately regenerating.
+    if (inputState.boost) {
+      this.stamina = clamp(this.stamina - BOOST_DRAIN_RATE * dt, 0, MAX_STAMINA);
     } else {
       const regenRate =
         inputState.brake || this.speed < STAMINA_REST_SPEED_THRESHOLD
@@ -363,7 +358,7 @@ export class BikeController {
   }
 
   // Rider pose (issue #126): blends a single -1..+1 pose factor (climb/seated ..
-  // neutral .. descend/attack) from slope/speed/pedal/brake state stashed by
+  // neutral .. descend/attack) from slope/speed/boost/brake state stashed by
   // applyInput(), then maps it onto the rider pivot's torso pitch + crouch/setback.
   // Blended via exponential approach so weight shifts read as smooth, not a snap.
   // Hard-landing absorb bypasses that blend deliberately — a landing compression
@@ -378,10 +373,10 @@ export class BikeController {
       0,
       1,
     );
-    const pedalFactor = this.pedalActive ? -RIDER_PEDAL_SEATED_WEIGHT : 0;
+    const boostFactor = this.boostActive ? -RIDER_BOOST_SEATED_WEIGHT : 0;
     const brakeFactor = this.brakeActive ? RIDER_BRAKE_ATTACK_WEIGHT : 0;
 
-    const targetPoseFactor = clamp(slopeFactor + speedFactor + pedalFactor + brakeFactor, -1, 1);
+    const targetPoseFactor = clamp(slopeFactor + speedFactor + boostFactor + brakeFactor, -1, 1);
 
     const blend = 1 - Math.exp(-RIDER_POSE_BLEND_RATE * dt);
     this.riderPoseFactor += (targetPoseFactor - this.riderPoseFactor) * blend;

@@ -31,7 +31,7 @@ actually in use, not an aspirational alternative.
 
 In-game HUD colours (`src/style.css`) are intentionally brighter/more saturated than the
 moody marketing palette above, because they need to read at a glance over a moving 3D
-scene: brake amber `rgba(200,150,20)`, pedal green `rgba(40,160,70)`, jump red
+scene: brake amber `rgba(200,150,20)`, boost green `rgba(40,160,70)`, jump red
 `rgba(180,40,40)`, warning `#ffd166`, error `#ff6b6b`. Don't flatten these into the
 marketing palette — they're a separate functional palette and already tuned for
 legibility. The in-game sky (`#87ceeb`, a bright cartoon blue) is also a deliberately

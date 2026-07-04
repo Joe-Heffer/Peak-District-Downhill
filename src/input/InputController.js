@@ -4,14 +4,14 @@ export function createInputController() {
     steerRight: false,
     jump: false,
     brake: false,
-    pedal: false,
+    boost: false,
     steerAmount: 0, // continuous -1..1 signal, written externally by TiltController
   };
 
   bindPointerZone('steer-left', (pressed) => (state.steerLeft = pressed));
   bindPointerZone('steer-right', (pressed) => (state.steerRight = pressed));
   bindPointerZone('brake-btn', (pressed) => (state.brake = pressed));
-  bindPointerZone('pedal-btn', (pressed) => (state.pedal = pressed));
+  bindPointerZone('boost-btn', (pressed) => (state.boost = pressed));
   bindPointerZone('jump-btn', (pressed) => {
     if (pressed) state.jump = true;
   });
@@ -35,7 +35,7 @@ export function createInputController() {
         break;
       case 'KeyW':
       case 'ArrowUp':
-        state.pedal = pressed;
+        state.boost = pressed;
         break;
       case 'Space':
         if (pressed) state.jump = true;
