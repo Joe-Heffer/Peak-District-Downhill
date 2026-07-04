@@ -7,7 +7,7 @@ beforeEach(() => {
     <div id="steer-left"></div>
     <div id="steer-right"></div>
     <div id="brake-btn"></div>
-    <div id="pedal-btn"></div>
+    <div id="boost-btn"></div>
     <div id="jump-btn"></div>
     <div id="reset-btn"></div>
   `;
@@ -74,18 +74,18 @@ describe('createInputController keyboard bindings', () => {
     expect(state.brake).toBe(false);
   });
 
-  it('sets and clears pedal on KeyW/ArrowUp keydown/keyup', () => {
+  it('sets and clears boost on KeyW/ArrowUp keydown/keyup', () => {
     const state = createInputController();
 
     dispatchKey('keydown', 'KeyW');
-    expect(state.pedal).toBe(true);
+    expect(state.boost).toBe(true);
     dispatchKey('keyup', 'KeyW');
-    expect(state.pedal).toBe(false);
+    expect(state.boost).toBe(false);
 
     dispatchKey('keydown', 'ArrowUp');
-    expect(state.pedal).toBe(true);
+    expect(state.boost).toBe(true);
     dispatchKey('keyup', 'ArrowUp');
-    expect(state.pedal).toBe(false);
+    expect(state.boost).toBe(false);
   });
 
   it('sets reset true on KeyR keydown, and keyup does not reset it (issue #66)', () => {
@@ -136,13 +136,13 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.brake).toBe(false);
   });
 
-  it('sets and clears pedal on pedal-btn pointerdown/pointerup', () => {
+  it('sets and clears boost on boost-btn pointerdown/pointerup', () => {
     const state = createInputController();
 
-    dispatchPointer('pedal-btn', 'pointerdown');
-    expect(state.pedal).toBe(true);
-    dispatchPointer('pedal-btn', 'pointerup');
-    expect(state.pedal).toBe(false);
+    dispatchPointer('boost-btn', 'pointerdown');
+    expect(state.boost).toBe(true);
+    dispatchPointer('boost-btn', 'pointerup');
+    expect(state.boost).toBe(false);
   });
 
   it('sets reset true on reset-btn pointerdown, and pointerup does not reset it (issue #66)', () => {
