@@ -25,6 +25,14 @@ const MUSIC_MUTED_KEY = 'musicMuted';
 const LOCATION_AREA_NAME = 'Cut Gate, Peak District';
 const LOCATION_UPDATE_INTERVAL = 0.25;
 
+// `?bike=ebike` overrides the default bike preset (issue #110) — the "simple toggle"
+// the issue asks for until a real bike-selection menu (#59) exists. Mirrors
+// setupSky.js's `?sky=` override pattern.
+function pickBikePreset() {
+  const override = new URLSearchParams(window.location.search).get('bike');
+  return override === 'ebike' ? 'ebike' : 'default';
+}
+
 // Autoplay policies suspend the AudioContext until a user gesture — resume it on the
 // first keypress/tap rather than gating gameplay on it.
 function resumeAudioOnGesture() {
@@ -154,6 +162,7 @@ async function init() {
   const spawnPoint = routePointToWorld(routeData.points[0]);
   const locationEl = document.getElementById('location');
   const staminaFillEl = document.getElementById('stamina-bar-fill');
+  const boostBtnEl = document.getElementById('boost-btn');
   const scoreValueEl = document.getElementById('score-value');
   const comboValueEl = document.getElementById('combo-value');
   const scoreBestEl = document.getElementById('score-best');
@@ -172,7 +181,16 @@ async function init() {
   scene.add(buildScenery(routeData, treesData, terrain));
 
   const { world, bikeMaterial } = setupWorld(terrainData);
-  const bike = new BikeController(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight);
+  const bike = new BikeController(
+    scene,
+    world,
+    camera,
+    terrain,
+    spawnPoint,
+    bikeMaterial,
+    isNight,
+    pickBikePreset(),
+  );
   devTools.attachGameState({ bike, world, scene, camera, terrain, terrainData, routeData, scoreTracker });
   const inputState = createInputController();
 
@@ -209,7 +227,11 @@ async function init() {
       tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
 
       miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
-      if (staminaFillEl) staminaFillEl.style.width = `${bike.stamina * 100}%`;
+      if (staminaFillEl) {
+        staminaFillEl.style.width = `${bike.stamina * 100}%`;
+        staminaFillEl.classList.toggle('is-empty', bike.stamina <= 0);
+      }
+      if (boostBtnEl) boostBtnEl.classList.toggle('is-boosting', bike.boostActive);
 
       const landcoverClass = terrain.getLandcoverAt(bike.mesh.position.x, bike.mesh.position.z);
       const scoreEvents = scoreTracker.update(dt, bike, landcoverClass);

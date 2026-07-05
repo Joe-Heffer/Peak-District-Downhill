@@ -22,7 +22,12 @@ const JUMP_LAUNCH_VELOCITY = 7;
 const STUCK_UNGROUNDED_TIME = 0.5;
 const BIKE_MASS = 85;
 const BASELINE_ACCEL = 2.0;
-const BOOST_ACCEL = 3.0;
+const BOOST_ACCEL = 4.0;
+const MAX_SPEED = 25;
+const EBIKE_BASELINE_ACCEL = 3.0;
+const EBIKE_BOOST_ACCEL = 6.0;
+const EBIKE_MAX_SPEED = 35;
+const REVERSE_STEER_SPEED_THRESHOLD = 0.5;
 const WHEEL_FRONT = 0;
 const WHEEL_REAR = 1;
 
@@ -211,6 +216,24 @@ describe('BikeController.applyInput steering (issue #66: steering angle replaces
       steerAmount: -1,
     });
     expect(opposing.vehicle.wheelInfos[WHEEL_FRONT].steering).toBeCloseTo(0);
+  });
+});
+
+describe('BikeController.applyInput reverse steering (issue: "unable to turn uphill")', () => {
+  it('mirrors the commanded steering angle while genuinely rolling backward', () => {
+    const bike = createBike();
+    bike.forwardSpeed = -(REVERSE_STEER_SPEED_THRESHOLD + 1);
+
+    bike.applyInput(0.1, { steerLeft: true, steerRight: false, jump: false, brake: false });
+    expect(bike.vehicle.wheelInfos[WHEEL_FRONT].steering).toBeCloseTo(-expectedSteerAngle(0, 1));
+  });
+
+  it('does not mirror steering for a small backward drift inside the threshold', () => {
+    const bike = createBike();
+    bike.forwardSpeed = -(REVERSE_STEER_SPEED_THRESHOLD - 0.1);
+
+    bike.applyInput(0.1, { steerLeft: true, steerRight: false, jump: false, brake: false });
+    expect(bike.vehicle.wheelInfos[WHEEL_FRONT].steering).toBeCloseTo(expectedSteerAngle(0, 1));
   });
 });
 
@@ -856,5 +879,79 @@ describe('BikeController.teleport (issue #81)', () => {
     expect(bike.yaw).toBe(0.7);
     expect(bike.speed).toBe(8);
     expect(bike.stamina).toBe(0.4);
+  });
+});
+
+describe('BikeController bike presets (issue #110: e-bike mode)', () => {
+  it('defaults to the default preset when no presetName is given', () => {
+    const bike = createBike();
+    expect(bike.baselineAccel).toBe(BASELINE_ACCEL);
+    expect(bike.boostAccel).toBe(BOOST_ACCEL);
+    expect(bike.maxSpeed).toBe(MAX_SPEED);
+  });
+
+  it('falls back to the default preset for an unrecognized presetName', () => {
+    const bike = new BikeController(
+      scene,
+      world,
+      camera,
+      terrain,
+      { x: 0, z: 0 },
+      undefined,
+      false,
+      'bogus',
+    );
+    expect(bike.baselineAccel).toBe(BASELINE_ACCEL);
+    expect(bike.boostAccel).toBe(BOOST_ACCEL);
+    expect(bike.maxSpeed).toBe(MAX_SPEED);
+  });
+
+  it('applies a stronger baseline and boost engine force under the ebike preset than default', () => {
+    const defaultBike = createBike();
+    const ebike = new BikeController(
+      scene,
+      world,
+      camera,
+      terrain,
+      { x: 0, z: 0 },
+      undefined,
+      false,
+      'ebike',
+    );
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+    const boostInput = { ...noInput, boost: true };
+
+    defaultBike.applyInput(1 / 60, noInput);
+    ebike.applyInput(1 / 60, noInput);
+    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(EBIKE_BASELINE_ACCEL * BIKE_MASS);
+    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeGreaterThan(
+      defaultBike.vehicle.wheelInfos[WHEEL_REAR].engineForce,
+    );
+
+    defaultBike.applyInput(1 / 60, boostInput);
+    ebike.applyInput(1 / 60, boostInput);
+    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(EBIKE_BOOST_ACCEL * BIKE_MASS);
+    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeGreaterThan(
+      defaultBike.vehicle.wheelInfos[WHEEL_REAR].engineForce,
+    );
+  });
+
+  it("clamps speed at the ebike preset's own higher maxSpeed rather than the default MAX_SPEED", () => {
+    const ebike = new BikeController(
+      scene,
+      world,
+      camera,
+      terrain,
+      { x: 0, z: 0 },
+      undefined,
+      false,
+      'ebike',
+    );
+    ebike.body.velocity.set(0, 0, 30); // above default MAX_SPEED (25), below EBIKE_MAX_SPEED (35)
+
+    ebike.syncAfterStep(1 / 60);
+
+    expect(ebike.speed).toBeCloseTo(30);
+    expect(ebike.maxSpeed).toBe(EBIKE_MAX_SPEED);
   });
 });

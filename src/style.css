@@ -74,6 +74,10 @@ html, body {
   transition: width 0.1s linear;
 }
 
+#stamina-bar-fill.is-empty {
+  background: #c24a4a;
+}
+
 #hud-score {
   /* top offset clears #hud-topleft's tallest realistic stack (wrapped credits line +
      location pill + stamina bar) so the two never overlap even though this block is
@@ -397,4 +401,9 @@ html, body {
 
 .control-zone--boost:active {
   background: rgba(60, 120, 200, 0.8);
+}
+
+.control-zone--boost.is-boosting {
+  background: rgba(255, 200, 40, 0.85);
+  box-shadow: 0 0 12px rgba(255, 200, 40, 0.9);
 }
