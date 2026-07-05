@@ -147,6 +147,15 @@ const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TU
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
 
+// m/s of backward travel (see this.forwardSpeed below) before steering input gets
+// mirrored (issue: "can't turn uphill") — a stall on a steep climb can leave the bike
+// rolling backward under gravity, and cannon-es's RaycastVehicle tire model then makes
+// the same commanded front-wheel angle yaw the nose the opposite way while reversing
+// (the same real effect as steering a car in reverse). Mirroring the sign here is an
+// input-mapping compensation so "steer left" keeps turning the nose left regardless of
+// travel direction — the underlying tire friction forces stay 100% real/emergent.
+const REVERSE_STEER_SPEED_THRESHOLD = 0.5;
+
 // Stuck-contact recovery (issue #148): even with setupWorld.js's Heightfield AABB fix,
 // a wheel's raycast is only ~0.5m long (suspensionRestLength + radius), and real,
 // non-flat LIDAR terrain can still occasionally put a wheel's connection point out of
@@ -192,17 +201,30 @@ const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting
 const BASELINE_ACCEL = 2.0;
 
 // m/s^2 — deliberate acceleration while holding boost with stamina left, *replacing*
-// baseline rather than adding to it (was PEDAL_BURST_ACCEL pre-#139, value and
-// wheel-force behaviour otherwise unchanged — still comfortably clears Cut Gate's real
-// ~19%-grade climbs, theoretical stall ~28-29% grade, and is the same magnitude the
-// existing roll-stability/hill-climb tuning already relies on; stacking it on top of
-// BASELINE_ACCEL instead measurably destabilizes hard cornering, since that combined
-// force is more than this chassis/suspension tuning was ever built for). At 0 stamina,
-// holding boost falls back to BASELINE_ACCEL alone — there is no more weaker fallback
-// rate. The old PEDAL_STEADY_ACCEL "granny gear" is removed per #139: boost is meant to
-// feel scarce and worth spending deliberately (e.g. right before a jump), not something
-// to lean on indefinitely.
-const BOOST_ACCEL = 3.0;
+// baseline rather than adding to it (was PEDAL_BURST_ACCEL pre-#139, wheel-force
+// behaviour otherwise unchanged; bumped from the original 3.0 post-#139 — that value's
+// only-1.5x delta over BASELINE_ACCEL read as "boost doesn't do anything" in practice,
+// especially once stamina ran out mid-climb). Now comfortably clears Cut Gate's real
+// ~19%-grade climbs with a real margin, theoretical stall ~41-42% grade (still stacking
+// it on top of BASELINE_ACCEL instead measurably destabilizes hard cornering, since that
+// combined force is more than this chassis/suspension tuning was ever built for). At 0
+// stamina, holding boost falls back to BASELINE_ACCEL alone — there is no more weaker
+// fallback rate. The old PEDAL_STEADY_ACCEL "granny gear" is removed per #139: boost is
+// meant to feel scarce and worth spending deliberately (e.g. right before a jump), not
+// something to lean on indefinitely.
+const BOOST_ACCEL = 4.0;
+
+// Bike presets (issue #110): only the longitudinal-power constants differ per preset —
+// steering/suspension/mass/jump stay module-level and shared, per #110's explicit scope
+// ("keep handling... unchanged"). Deliberately minimal rather than extracting every
+// constant into per-bike config — that fuller extraction is #59's job if/when it lands;
+// this is a narrow, additive map #59 can build on later without restructuring.
+const BIKE_PRESETS = {
+  default: { baselineAccel: BASELINE_ACCEL, boostAccel: BOOST_ACCEL, maxSpeed: MAX_SPEED },
+  // ~1.5x baseline, ~1.5x boost, ~1.4x top speed — "significantly higher" per the issue,
+  // a first-pass starting point pending playtest feel like every other constant here.
+  ebike: { baselineAccel: 3.0, boostAccel: 6.0, maxSpeed: 35 },
+};
 
 // Rider pose (issue #126): blends a seated "climbing" pose and a low "attack
 // position" descending pose via a single -1..+1 pose factor (see
@@ -302,11 +324,16 @@ function setBodyQuaternionFromTerrain(body, getHeightAt, x, z, yaw = 0) {
 }
 
 export class BikeController {
-  constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight = false) {
+  constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight = false, presetName = 'default') {
     this.camera = camera;
     this.terrain = terrain;
+    const preset = BIKE_PRESETS[presetName] ?? BIKE_PRESETS.default;
+    this.baselineAccel = preset.baselineAccel;
+    this.boostAccel = preset.boostAccel;
+    this.maxSpeed = preset.maxSpeed;
     this.yaw = 0;
     this.speed = 0;
+    this.forwardSpeed = 0;
     this.stamina = MAX_STAMINA;
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
@@ -452,6 +479,7 @@ export class BikeController {
     this.resetVehicleControls();
     this.yaw = 0;
     this.speed = 0;
+    this.forwardSpeed = 0;
     this.stamina = MAX_STAMINA;
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;
@@ -527,7 +555,11 @@ export class BikeController {
     const steerSignal = clamp(digitalSteer + analogSteer, -1, 1);
     const speedForSteer = Math.max(this.speed, TURN_RATE_MIN_SPEED);
     const steerAngleMagnitude = clamp(Math.atan((turnCap * WHEELBASE) / speedForSteer), 0, MAX_STEER_ANGLE);
-    this.vehicle.setSteeringValue(steerAngleMagnitude * steerSignal, WHEEL_FRONT);
+    // Mirror the commanded angle while genuinely rolling backward (see
+    // REVERSE_STEER_SPEED_THRESHOLD above) so steering direction matches the player's
+    // expectation regardless of travel direction.
+    const directionSign = this.forwardSpeed < -REVERSE_STEER_SPEED_THRESHOLD ? -1 : 1;
+    this.vehicle.setSteeringValue(steerAngleMagnitude * steerSignal * directionSign, WHEEL_FRONT);
 
     this.boostActive = Boolean(inputState.boost);
     this.brakeActive = Boolean(inputState.brake);
@@ -538,7 +570,7 @@ export class BikeController {
     // Boost replaces baseline (rather than stacking on top of it) while held with
     // stamina left (issue #139) — at 0 stamina, holding boost falls back to baseline
     // alone, not a weaker fallback rate.
-    const engineAccel = inputState.boost && this.stamina > 0 ? BOOST_ACCEL : BASELINE_ACCEL;
+    const engineAccel = inputState.boost && this.stamina > 0 ? this.boostAccel : this.baselineAccel;
     this.vehicle.applyEngineForce(engineAccel * BIKE_MASS, WHEEL_REAR);
 
     const brakeForce = inputState.brake ? BRAKE_MU * BIKE_MASS * GRAVITY_MAG : 0;
@@ -593,10 +625,11 @@ export class BikeController {
 
   syncAfterStep(dt = 1 / 60) {
     // Defensive ceiling for artifact-steep terrain cells, applied to the real chassis
-    // velocity rather than a scalar (see MAX_SPEED's original comment).
+    // velocity rather than a scalar (see MAX_SPEED's original comment). Uses this.maxSpeed
+    // (per-preset, issue #110) rather than the module constant directly.
     const rawHorizontalSpeed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
-    if (rawHorizontalSpeed > MAX_SPEED) {
-      const scale = MAX_SPEED / rawHorizontalSpeed;
+    if (rawHorizontalSpeed > this.maxSpeed) {
+      const scale = this.maxSpeed / rawHorizontalSpeed;
       this.body.velocity.x *= scale;
       this.body.velocity.z *= scale;
     }
@@ -608,7 +641,10 @@ export class BikeController {
     // not its own local +Z.
     const forward = this.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
     this.yaw = Math.atan2(forward.x, forward.z);
-    this.speed = Math.min(rawHorizontalSpeed, MAX_SPEED);
+    this.speed = Math.min(rawHorizontalSpeed, this.maxSpeed);
+    // Signed: positive means moving toward the mesh's nose, negative means rolling
+    // backward — drives the reverse-steering compensation in applyInput above.
+    this.forwardSpeed = this.body.velocity.dot(forward);
     // Descending means moving downhill along `forward`, i.e. forward pointing downward
     // (negative y) — hence the negation to match the />0 descending, <0 climbing/
     // contract updateRiderPose() (and its tests) rely on.
