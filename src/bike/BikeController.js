@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clamp } from '../terrain/HeightmapTerrain.js';
+import { clamp, getGroundQuaternion } from '../terrain/HeightmapTerrain.js';
 
 const TURN_RATE = 2.2;
 const HARD_LANDING_VELOCITY = -8;
@@ -288,6 +288,19 @@ function createRiderModel() {
   return { root, pivot };
 }
 
+// Sets a CANNON.Body's quaternion to face `yaw` (about world Y, same convention as
+// setFromAxisAngle((0,1,0), yaw)) then tip flush with the local terrain slope at (x, z),
+// instead of leaving/resetting it dead level — shared by the constructor, respawn(), and
+// recoverFromStuckContact(), all of which reset the chassis to a resting orientation.
+// getGroundQuaternion's tilt is a pure shortest-arc rotation from world-up to the terrain
+// normal (no yaw component of its own), so composing tilt * yaw applies the heading first
+// and then tips it onto the slope, preserving yaw exactly on flat ground.
+function setBodyQuaternionFromTerrain(body, getHeightAt, x, z, yaw = 0) {
+  const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  const q = getGroundQuaternion(getHeightAt, x, z).multiply(yawQuat);
+  body.quaternion.set(q.x, q.y, q.z, q.w);
+}
+
 export class BikeController {
   constructor(scene, world, camera, terrain, spawnPoint, bikeMaterial, isNight = false) {
     this.camera = camera;
@@ -355,6 +368,11 @@ export class BikeController {
       // do nothing even though speed/stamina still updated.
       allowSleep: false,
     });
+    // Spawn flush with the local terrain slope (issue: bike toppling on the real Cut
+    // Gate route's cambered start) rather than always dead level — dropping a level
+    // chassis onto a real off-camber cell creates an immediate asymmetric suspension
+    // torque the soft outriggers below aren't tuned to catch from a dead stop.
+    setBodyQuaternionFromTerrain(this.body, terrain.getHeightAt, spawnPoint.x, spawnPoint.z, 0);
     // Rotation is fully free (issue #66): roll/pitch/yaw all emerge from wheel contact
     // forces instead of being hand-set, so the bike can genuinely tip over — see the
     // physics constants comment above for why the outrigger wheels exist and why no
@@ -430,7 +448,7 @@ export class BikeController {
     this.body.position.set(this.spawnPoint.x, spawnY, this.spawnPoint.z);
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
-    this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), 0);
+    setBodyQuaternionFromTerrain(this.body, this.terrain.getHeightAt, this.spawnPoint.x, this.spawnPoint.z, 0);
     this.resetVehicleControls();
     this.yaw = 0;
     this.speed = 0;
@@ -475,7 +493,7 @@ export class BikeController {
     this.body.position.y = groundY;
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
-    this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), this.yaw);
+    setBodyQuaternionFromTerrain(this.body, this.terrain.getHeightAt, this.body.position.x, this.body.position.z, this.yaw);
     this.resetVehicleControls();
     this.wasGrounded = true;
     this.previousVerticalVelocity = 0;

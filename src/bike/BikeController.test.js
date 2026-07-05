@@ -114,6 +114,36 @@ describe('BikeController grounding on the real Cut Gate terrain (issue #148 regr
 
     expect(groundedWithinBudget).toBe(true);
   });
+
+  it('stays upright with no input at the real route start (bike-falls-over-at-spawn regression)', () => {
+    // Regression test: the route's real first point sits on a steeply side-cambered
+    // ("twisted") cell (~16 degrees of lateral slope) — spawning the chassis dead level
+    // onto it (the old behaviour) created an immediate asymmetric suspension torque the
+    // soft outrigger wheels can't catch from a dead stop, tipping the bike over before
+    // the player can react. The chassis should now spawn flush with that slope instead.
+    const terrainData = JSON.parse(
+      fs.readFileSync(new URL('../../public/data/terrain/cutgate.json', import.meta.url)),
+    );
+    const routeData = JSON.parse(
+      fs.readFileSync(new URL('../../public/data/routes/cutgate.json', import.meta.url)),
+    );
+    const realTerrain = { getHeightAt: createHeightLookup(terrainData) };
+    const { world: realWorld, bikeMaterial } = setupWorld(terrainData);
+    const spawnPoint = routePointToWorld(routeData.points[0]);
+
+    const bike = new BikeController(scene, realWorld, camera, realTerrain, spawnPoint, bikeMaterial);
+    const dt = 1 / 60;
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+
+    for (let i = 0; i < 180; i += 1) {
+      bike.applyInput(dt, input);
+      realWorld.step(dt);
+    }
+    bike.syncAfterStep(dt);
+
+    const up = bike.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    expect(up.y).toBeGreaterThan(0.5); // still mostly upright, not tipped onto its side
+  });
 });
 
 describe('BikeController.applyInput steering (issue #66: steering angle replaces yaw increment)', () => {
