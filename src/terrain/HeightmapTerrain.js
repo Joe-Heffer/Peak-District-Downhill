@@ -177,6 +177,19 @@ export function createHeightLookup(terrainData) {
   };
 }
 
+// Orientation whose local up matches the terrain's surface normal at (x, z), estimated
+// via central finite differences over getHeightAt — used to spawn/reset the bike flush
+// with the actual slope instead of always dead level (see BikeController.js's
+// constructor/respawn/recoverFromStuckContact). On flat ground the gradient is zero and
+// this reduces to the identity quaternion, matching the old always-level behaviour.
+// sampleRadius default roughly matches the bike chassis's own half-footprint.
+export function getGroundQuaternion(getHeightAt, x, z, sampleRadius = 0.5) {
+  const dhdx = (getHeightAt(x + sampleRadius, z) - getHeightAt(x - sampleRadius, z)) / (2 * sampleRadius);
+  const dhdz = (getHeightAt(x, z + sampleRadius) - getHeightAt(x, z - sampleRadius)) / (2 * sampleRadius);
+  const normal = new THREE.Vector3(-dhdx, 1, -dhdz).normalize();
+  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+}
+
 // Nearest-cell landcover lookup — unlike height, class indices aren't numerically
 // interpolable, so this snaps to the containing cell rather than bilinear-blending.
 export function createLandcoverLookup(landcoverData) {

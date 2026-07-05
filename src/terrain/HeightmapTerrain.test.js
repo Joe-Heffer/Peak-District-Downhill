@@ -1,5 +1,12 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { applyMaxAnisotropy, clamp, createHeightLookup, createLandcoverLookup } from './HeightmapTerrain.js';
+import {
+  applyMaxAnisotropy,
+  clamp,
+  createHeightLookup,
+  createLandcoverLookup,
+  getGroundQuaternion,
+} from './HeightmapTerrain.js';
 
 const terrainData = {
   cols: 3,
@@ -84,6 +91,30 @@ describe('createHeightLookup / getHeightAt', () => {
     const lastI = terrainData.cols - 1;
     const lastJ = terrainData.rows - 1;
     expect(getHeightAt(1e6, -1e6)).toBeCloseTo(terrainData.heights[lastI][lastJ]);
+  });
+});
+
+describe('getGroundQuaternion', () => {
+  it('is the identity on flat ground', () => {
+    const q = getGroundQuaternion(() => 5, 0, 0);
+    expect(q.x).toBeCloseTo(0);
+    expect(q.y).toBeCloseTo(0);
+    expect(q.z).toBeCloseTo(0);
+    expect(q.w).toBeCloseTo(1);
+  });
+
+  // Bike-falls-over-at-spawn regression: on a slope, the chassis's local up should tip
+  // to match the terrain's surface normal instead of staying world-up.
+  it('tips the up vector to match the terrain normal on a sloped plane', () => {
+    const slope = 0.3; // rise/run — a real ~16-degree camber is tan(16deg) =~ 0.29
+    const getHeightAt = (x) => slope * x; // rises along +x, flat along z
+    const q = getGroundQuaternion(getHeightAt, 0, 0);
+
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    const expectedNormal = new THREE.Vector3(-slope, 1, 0).normalize();
+    expect(up.x).toBeCloseTo(expectedNormal.x);
+    expect(up.y).toBeCloseTo(expectedNormal.y);
+    expect(up.z).toBeCloseTo(expectedNormal.z);
   });
 });
 
