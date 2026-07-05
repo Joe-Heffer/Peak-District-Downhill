@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.3.0...peak-district-downhill-v0.4.0) (2026-07-05)
+
+
+### Features
+
+* add dynamic rider pose driven by slope/speed/pedal/brake ([#126](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/126)) ([#127](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/127)) ([46a3c89](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/46a3c8928dd9e5e70d3d150187134278678c09ad))
+* add opt-in tilt steering for smartphones ([#128](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/128)) ([fa7e18a](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/fa7e18a92548f9fb0881bea5c4ba6f8673e03e47))
+* add THPS-style scoring with combo multiplier and high score ([#136](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/136)) ([2f15dba](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/2f15dba84dab710638c3340a88674e06cb1864e2))
+* derive real tree positions/heights from LIDAR canopy data ([#140](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/140)) ([5e40779](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/5e407790d93b34ac57f607efe04ffd185f5704a8)), closes [#50](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/50)
+* make up arrow pedal instead of jump ([#125](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/125)) ([894a4d5](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/894a4d558e1181f37d3e3a5d3c89fdbae9e81b45))
+* render rocky, ground-level tracks for the route and bridleway network ([#131](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/131)) ([8ec40c2](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/8ec40c204ba08f3395b35a562670ca679f8666a3))
+* replace bike velocity-hack physics with CANNON.RaycastVehicle ([#66](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/66)) ([#141](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/141)) ([f9495ba](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/f9495ba3ec3fc300ff48b52fdc42c9fb55c5bf11))
+* replace hold-to-pedal with an on-demand speed boost ([#147](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/147)) ([ea4e1b8](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/ea4e1b8e8764f7e3172598d67b73ec6d8a4e5ae0))
+
+
+### Bug Fixes
+
+* bump GitHub Actions node-version from 20 to 22 ([#123](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/123)) ([c26201c](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/c26201c05381dc4e00d062fec63c8937e859ee7a)), closes [#121](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/121)
+* mirror steering while rolling backward, strengthen boost, add e-bike mode ([#110](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/110)) ([#188](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/188)) ([7ecd860](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/7ecd860d64bc25de937074b8b2d971a441f96455))
+* spawn the bike facing down the track instead of a fixed heading ([#190](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/190)) ([903f076](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/903f07655b954235c7764157709a0ca91bd9b68b))
+* spawn/reset the bike flush with terrain slope instead of dead level ([#162](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/162)) ([733d8cd](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/733d8cddd2f18df0915829f2ca35d7b0d287f197))
+* stack top-left HUD elements to stop credits overlapping location ([#132](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/132)) ([34fb0dd](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/34fb0dde90da8e90ae04e5b76ae48e6e1aa1b985))
+* stop the bike tipping over constantly and let it climb hills ([#189](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/189)) ([75feafe](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/75feafec8230fc0da3c4ab673f76114bb742e28e))
+* unstick the bike when wheel raycasts miss the real terrain ([#148](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/148)) ([#149](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/149)) ([f48ef34](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/f48ef3494004ce4264d890c450afb8669d042046))
+
 ## [0.3.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.2.0...peak-district-downhill-v0.3.0) (2026-07-03)
 
 
