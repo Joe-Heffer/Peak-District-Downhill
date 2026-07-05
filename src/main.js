@@ -9,7 +9,7 @@ import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { loadTreesData } from './terrain/loadTreesData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { createRockTrackMaterial } from './terrain/RockTrackTexture.js';
-import { loadRouteData, buildRouteOverlay, routePointToWorld } from './routes/RouteOverlay.js';
+import { loadRouteData, buildRouteOverlay, routePointToWorld, computeSpawnYaw } from './routes/RouteOverlay.js';
 import { loadPathsData, buildPathsOverlay } from './routes/PathsOverlay.js';
 import { buildScenery } from './scenery/Scenery.js';
 import { AudioManager } from './audio/AudioManager.js';
@@ -159,7 +159,9 @@ async function init() {
   ]);
   renderCredits(terrainData, routeData, landcoverData, pathsData, treesData);
 
-  const spawnPoint = routePointToWorld(routeData.points[0]);
+  // yaw faces from the route's first point toward its second, so the bike spawns
+  // already oriented down the track instead of at a fixed heading (see computeSpawnYaw).
+  const spawnPoint = { ...routePointToWorld(routeData.points[0]), yaw: computeSpawnYaw(routeData) };
   const locationEl = document.getElementById('location');
   const staminaFillEl = document.getElementById('stamina-bar-fill');
   const boostBtnEl = document.getElementById('boost-btn');
