@@ -21,8 +21,10 @@ const CAMERA_LERP = 0.1;
 // game (the visible mesh follows the chassis body only, see syncAfterStep), so the
 // outriggers are 100% invisible physics geometry. Suspension is bounded
 // (maxSuspensionTravel/maxSuspensionForce), so a hard enough landing or off-camber hit
-// can still exceed what the outriggers arrest and tip the chassis over for real —
-// deliberately no artificial roll cap or auto-recovery.
+// can still exceed what the outriggers arrest — applyUprightCorrection() (see its
+// constants above) adds a capped self-righting torque on top of the outriggers for
+// routine bumps/off-camber landings, but disables itself past a tilt threshold so a
+// genuine crash/flip is still possible; there is no unconditional roll cap or recovery.
 const CHASSIS_HALF_EXTENTS = new CANNON.Vec3(0.3, 0.15, 0.55);
 const WHEEL_RADIUS = 0.33;
 // Chassis-local Z positions of the steering/engine wheels. NOTE: these are on the
@@ -90,6 +92,13 @@ const REAL_WHEEL_OPTIONS = {
   dampingCompression: 12,
   dampingRelaxation: 7,
   maxSuspensionForce: 6000,
+  // Left at 0.01 (issue: bike tipping over too easily) — cannon-es's own doc comment on
+  // this field is counter-intuitively named: 1 applies the friction impulse at the wheel's
+  // hit point (easy to roll over), 0 applies it in the chassis's own center-of-mass plane
+  // (hard to roll over), so this near-zero value is already the most roll-resistant this
+  // model supports, not something to raise further. Raising it to ~0.18 was tried and
+  // measurably made the real Cut Gate spawn's cambered cell tip the bike over faster, not
+  // slower — reverted. Roll stability instead comes from applyUprightCorrection() below.
   rollInfluence: 0.01,
 };
 // Outriggers: a lightly-loaded extra suspension corner (like real trainer wheels
@@ -106,6 +115,11 @@ const OUTRIGGER_WHEEL_OPTIONS = {
   axleLocal: new CANNON.Vec3(1, 0, 0),
   suspensionRestLength: SUSPENSION_REST_LENGTH,
   maxSuspensionTravel: 0.1,
+  // Left at the original tuning-spike values (issue: bike tipping over too easily) — a
+  // stiffer outrigger (tried up to 18/4/3) measurably fights the real wheels for pitch
+  // balance under boost, producing a wheelie/pitch feedback loop that snowballs into a
+  // full backflip within ~2s of holding boost on flat ground. Roll stability instead comes
+  // from applyUprightCorrection() below.
   suspensionStiffness: 12,
   dampingCompression: 3,
   dampingRelaxation: 2,
@@ -135,7 +149,12 @@ const HEADLIGHT_PENUMBRA = 0.4;
 // these figures.
 const BIKE_MASS = 85; // kg — ~15kg trail/enduro bike + ~70kg rider
 const GRAVITY_MAG = 9.82; // m/s^2 — matches world gravity in setupWorld.js
-const ROLLING_RESISTANCE_COEFF = 0.025; // Crr — knobby MTB tyres on dirt/gravel
+// Crr — raised from a literal knobby-tyre-on-dirt figure (0.025) to ~grade-independent
+// arcade tuning (issue: "can't go uphill") paired with BASELINE_ACCEL below: rolling
+// resistance nudges the flat-ground cruise and the climb equilibrium down by roughly the
+// same amount, so it re-tightens the flat cruise back to a lazy speed without reopening
+// the climb problem the higher baseline force was raised to fix.
+const ROLLING_RESISTANCE_COEFF = 0.04;
 const AIR_DENSITY = 1.225; // kg/m^3 — standard sea-level air density
 const DRAG_CDA = 0.6; // m^2 — crouched downhill riding position
 // Tyre traction ceiling, shared by cornering and drive/brake force via each real wheel's
@@ -146,6 +165,23 @@ const BRAKE_MU = 0.5; // brake-force-magnitude scalar, below GRIP_MU (loose dirt
 const TURN_RATE_MIN_SPEED = 0.5; // m/s — below this, fall back to the flat TURN_RATE
 const MAX_SPEED = 25; // m/s (~90 km/h) — defensive clamp for artifact-steep terrain cells
 const JUMP_LAUNCH_VELOCITY = 7; // m/s — same launch speed the old JUMP_IMPULSE/mass gave
+
+// Upright self-righting assist (issue: "the bike falls over all the time" — free rotation
+// plus lightly-loaded outrigger wheels wasn't enough to stop routine bumps/off-camber
+// landings from tipping the chassis). Applied each step in applyInput() as a direct
+// angular-velocity nudge (same exponential-approach style as RIDER_POSE_BLEND_RATE below,
+// not a torque/spring) pulling the chassis's up vector back toward the *local terrain's*
+// up vector (not world up — see getGroundQuaternion usage in applyUprightCorrection()),
+// so a bike correctly pitched into a climb or descent reads as already-upright and isn't
+// fought. A torque-based (spring/damper) version of this was tried first and rejected: at
+// this chassis's real moment of inertia, a torque strong enough to matter is stiff enough
+// to numerically diverge under cannon-es's explicit integration at a 1/60s step — directly
+// blending angularVelocity has no such resonance and is trivially stable at any gain.
+// Disabled entirely past UPRIGHT_CORRECTION_MAX_TILT so a genuine crash/flip can still
+// happen — this is a forgiveness assist for ordinary riding, not a hard roll cap.
+const UPRIGHT_CORRECTION_RATE = 3; // rad/s of corrective angular velocity per rad of tilt
+const UPRIGHT_CORRECTION_BLEND_RATE = 6; // 1/s exponential approach, as RIDER_POSE_BLEND_RATE
+const UPRIGHT_CORRECTION_MAX_TILT = 1.0; // rad (~57 deg) — beyond this, no correction at all
 
 // m/s of backward travel (see this.forwardSpeed below) before steering input gets
 // mirrored (issue: "can't turn uphill") — a stall on a steep climb can leave the bike
@@ -192,27 +228,34 @@ const STAMINA_REST_SPEED_THRESHOLD = 1; // m/s — below this counts as "resting
 // vehicle's driven wheel needs a real load on it before it can transmit force as forward
 // motion rather than wheel-spin/chatter — empirically (not just the simple
 // rollingResistance-vs-drag balance you'd compute by hand), anything much below this
-// stalls out near 0 instead of building speed. At 2.0 it settles to a lazy ~4.5-5 m/s
-// (~16-18 km/h) cruise on flat ground, comfortably short of MAX_SPEED and of boosted
-// speeds — gravity should still be doing the interesting work on descents, not this. It
-// also labors visibly on any real climb (well under half its flat-ground speed already
-// on a 10% grade), so hills stay mostly gravity's (downhill) or BOOST_ACCEL's (uphill,
-// while stamina lasts) job.
-const BASELINE_ACCEL = 2.0;
+// stalls out near 0 instead of building speed.
+//
+// Raised from 2.0 (issue: "can't go uphill" — the old value's gross force, 170N, was
+// already smaller than gravity's along-slope component on Cut Gate's real ~19% grade
+// climbs, ~155N, leaving essentially nothing after rolling resistance and stalling the
+// bike out with no way up short of spending boost). At 3.2, gross force is 3.2*85=272N:
+// - 19% grade: gravity component ~85*9.82*sin(atan(0.19))≈155N, rolling resistance (see
+//   ROLLING_RESISTANCE_COEFF) ~85*9.82*0.04≈33N, net ≈272-155-33≈84N of real climbing
+//   push — comfortably positive, not a stall.
+// - ~30% grade: gravity component ~85*9.82*sin(atan(0.30))≈240N, net ≈272-240-33≈-1N —
+//   the steepest pitches still bog down near parity rather than well before, keeping some
+//   genuine struggle at the extremes without making ordinary hills a fight.
+// Paired with the higher ROLLING_RESISTANCE_COEFF above, flat-ground equilibrium still
+// settles to a lazy cruise (comfortably short of MAX_SPEED) rather than the flat-ground
+// speed just running away now that baseline is stronger.
+const BASELINE_ACCEL = 3.2;
 
 // m/s^2 — deliberate acceleration while holding boost with stamina left, *replacing*
 // baseline rather than adding to it (was PEDAL_BURST_ACCEL pre-#139, wheel-force
-// behaviour otherwise unchanged; bumped from the original 3.0 post-#139 — that value's
-// only-1.5x delta over BASELINE_ACCEL read as "boost doesn't do anything" in practice,
-// especially once stamina ran out mid-climb). Now comfortably clears Cut Gate's real
-// ~19%-grade climbs with a real margin, theoretical stall ~41-42% grade (still stacking
-// it on top of BASELINE_ACCEL instead measurably destabilizes hard cornering, since that
-// combined force is more than this chassis/suspension tuning was ever built for). At 0
-// stamina, holding boost falls back to BASELINE_ACCEL alone — there is no more weaker
-// fallback rate. The old PEDAL_STEADY_ACCEL "granny gear" is removed per #139: boost is
-// meant to feel scarce and worth spending deliberately (e.g. right before a jump), not
-// something to lean on indefinitely.
-const BOOST_ACCEL = 4.0;
+// behaviour otherwise unchanged). Kept at a similar ~1.7x multiple over BASELINE_ACCEL as
+// before (was 4.0/2.0=2x; 5.5/3.2≈1.7x) so boost still reads as a distinct, meaningfully
+// stronger burst — reserved for jump run-ups/emergencies now that baseline alone carries
+// ordinary climbs, rather than being the only way to get up a hill. At 0 stamina, holding
+// boost falls back to BASELINE_ACCEL alone — there is no more weaker fallback rate. The
+// old PEDAL_STEADY_ACCEL "granny gear" is removed per #139: boost is meant to feel scarce
+// and worth spending deliberately (e.g. right before a jump), not something to lean on
+// indefinitely.
+const BOOST_ACCEL = 5.5;
 
 // Bike presets (issue #110): only the longitudinal-power constants differ per preset —
 // steering/suspension/mass/jump stay module-level and shared, per #110's explicit scope
@@ -223,7 +266,7 @@ const BIKE_PRESETS = {
   default: { baselineAccel: BASELINE_ACCEL, boostAccel: BOOST_ACCEL, maxSpeed: MAX_SPEED },
   // ~1.5x baseline, ~1.5x boost, ~1.4x top speed — "significantly higher" per the issue,
   // a first-pass starting point pending playtest feel like every other constant here.
-  ebike: { baselineAccel: 3.0, boostAccel: 6.0, maxSpeed: 35 },
+  ebike: { baselineAccel: 4.8, boostAccel: 8.0, maxSpeed: 35 },
 };
 
 // Rider pose (issue #126): blends a seated "climbing" pose and a low "attack
@@ -402,8 +445,8 @@ export class BikeController {
     setBodyQuaternionFromTerrain(this.body, terrain.getHeightAt, spawnPoint.x, spawnPoint.z, 0);
     // Rotation is fully free (issue #66): roll/pitch/yaw all emerge from wheel contact
     // forces instead of being hand-set, so the bike can genuinely tip over — see the
-    // physics constants comment above for why the outrigger wheels exist and why no
-    // roll-correction torque is added here.
+    // physics constants comment above for why the outrigger wheels exist, and
+    // applyUprightCorrection() for the capped self-righting assist layered on top of them.
     this.body.angularFactor.set(1, 1, 1);
 
     this.vehicle = new CANNON.RaycastVehicle({
@@ -535,6 +578,31 @@ export class BikeController {
     return REAL_WHEELS.some((wheelIndex) => this.vehicle.wheelInfos[wheelIndex].isInContact);
   }
 
+  // Capped self-righting assist (see the UPRIGHT_CORRECTION_* constants above): blends the
+  // chassis's angular velocity toward whatever would rotate its up vector back toward the
+  // *local terrain's* up vector (via getGroundQuaternion, same helper the spawn/respawn
+  // orientation uses), not world-up — so a bike correctly pitched into a climb/descent
+  // reads as already upright and isn't fought. Disables entirely past
+  // UPRIGHT_CORRECTION_MAX_TILT so a genuine crash/flip still happens uncorrected. The
+  // correction axis is horizontal-ish by construction (cross of two near-vertical
+  // vectors), so only its X/Z components are applied, leaving the yaw (Y) component of
+  // angular velocity — this game's steering axis — untouched.
+  applyUprightCorrection(dt) {
+    const bodyUp = this.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    const groundQuat = getGroundQuaternion(this.terrain.getHeightAt, this.body.position.x, this.body.position.z);
+    const terrainUpThree = new THREE.Vector3(0, 1, 0).applyQuaternion(groundQuat);
+    const terrainUp = new CANNON.Vec3(terrainUpThree.x, terrainUpThree.y, terrainUpThree.z);
+
+    const angle = Math.acos(clamp(bodyUp.dot(terrainUp), -1, 1));
+    if (angle < 1e-4 || angle > UPRIGHT_CORRECTION_MAX_TILT) return;
+
+    const axis = bodyUp.cross(terrainUp).unit();
+    const targetAngularVelocity = axis.scale(angle * UPRIGHT_CORRECTION_RATE);
+    const blend = 1 - Math.exp(-UPRIGHT_CORRECTION_BLEND_RATE * dt);
+    this.body.angularVelocity.x += (targetAngularVelocity.x - this.body.angularVelocity.x) * blend;
+    this.body.angularVelocity.z += (targetAngularVelocity.z - this.body.angularVelocity.z) * blend;
+  }
+
   applyInput(dt, inputState) {
     // Sharper turns are only possible at low speed — the cap below derives the same
     // way a real bike's cornering does: lateral (centripetal) acceleration v*omega
@@ -564,14 +632,26 @@ export class BikeController {
     this.boostActive = Boolean(inputState.boost);
     this.brakeActive = Boolean(inputState.brake);
 
-    // Propulsion/braking as real forces at the wheels rather than a scalar speed update
-    // — slope-induced acceleration now comes for free from gravity + wheel ground
-    // contact, so there's no forward-terrain-sampling hack here any more.
+    // Propulsion as a direct chassis-CoM force (not vehicle.applyEngineForce on the rear
+    // wheel) — slope-induced acceleration comes for free from gravity + wheel ground
+    // contact either way, but driving the real BASELINE_ACCEL/BOOST_ACCEL magnitudes
+    // (issue: "can't go uphill") through the rear wheel's friction model reacts as a
+    // genuine nose-up pitching torque (the wheel's contact point sits behind and below the
+    // CoM), and at these force levels that torque reliably wheelies the chassis into a full
+    // backward flip within a few seconds on any real climb — reproduced directly against a
+    // sloped ground stub. A force applied at the CoM (same pattern as the drag/rolling-
+    // resistance force just below) has no lever arm, so it accelerates the chassis with
+    // zero pitching reaction regardless of magnitude — measured stable up to at least a 40%
+    // climb where the old wheel-driven force flipped by ~18%. WHEEL_REAR's own engineForce
+    // is explicitly zeroed since grip/steering/braking still come from its friction model;
+    // only propulsion moves off the wheel.
     // Boost replaces baseline (rather than stacking on top of it) while held with
     // stamina left (issue #139) — at 0 stamina, holding boost falls back to baseline
     // alone, not a weaker fallback rate.
     const engineAccel = inputState.boost && this.stamina > 0 ? this.boostAccel : this.baselineAccel;
-    this.vehicle.applyEngineForce(engineAccel * BIKE_MASS, WHEEL_REAR);
+    this.vehicle.applyEngineForce(0, WHEEL_REAR);
+    const forward = this.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
+    this.body.applyForce(forward.scale(engineAccel * BIKE_MASS));
 
     const brakeForce = inputState.brake ? BRAKE_MU * BIKE_MASS * GRAVITY_MAG : 0;
     for (const wheelIndex of REAL_WHEELS) {
@@ -593,6 +673,8 @@ export class BikeController {
         ),
       );
     }
+
+    this.applyUprightCorrection(dt);
 
     // Keyed on the raw input (not whether stamina was actually available to spend) so
     // holding boost at 0 stamina keeps it pinned at 0 instead of immediately regenerating.

@@ -21,11 +21,11 @@ const MAX_STEER_ANGLE = 0.6;
 const JUMP_LAUNCH_VELOCITY = 7;
 const STUCK_UNGROUNDED_TIME = 0.5;
 const BIKE_MASS = 85;
-const BASELINE_ACCEL = 2.0;
-const BOOST_ACCEL = 4.0;
+const BASELINE_ACCEL = 3.2;
+const BOOST_ACCEL = 5.5;
 const MAX_SPEED = 25;
-const EBIKE_BASELINE_ACCEL = 3.0;
-const EBIKE_BOOST_ACCEL = 6.0;
+const EBIKE_BASELINE_ACCEL = 4.8;
+const EBIKE_BOOST_ACCEL = 8.0;
 const EBIKE_MAX_SPEED = 35;
 const REVERSE_STEER_SPEED_THRESHOLD = 0.5;
 const WHEEL_FRONT = 0;
@@ -147,7 +147,9 @@ describe('BikeController grounding on the real Cut Gate terrain (issue #148 regr
     bike.syncAfterStep(dt);
 
     const up = bike.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
-    expect(up.y).toBeGreaterThan(0.5); // still mostly upright, not tipped onto its side
+    // Tightened from 0.5 now that applyUprightCorrection() actively counteracts this real
+    // ~16-degree camber rather than merely not fighting it (real measured value ~0.96).
+    expect(up.y).toBeGreaterThan(0.85); // still mostly upright, not tipped onto its side
   });
 });
 
@@ -238,23 +240,44 @@ describe('BikeController.applyInput reverse steering (issue: "unable to turn uph
 });
 
 describe('BikeController.applyInput propulsion/braking (issue #66: real wheel forces)', () => {
-  it('applies boost engine force (superseding baseline) to the rear wheel while boosting with stamina available', () => {
+  // Propulsion moved off the rear wheel's engineForce onto a direct chassis-CoM force
+  // (see applyInput's comment in BikeController.js: driving BASELINE_ACCEL/BOOST_ACCEL's
+  // real magnitudes through the wheel's friction model reliably wheelied the chassis into
+  // a backward flip on real climbs) — WHEEL_REAR.engineForce is always exactly 0 now, and
+  // these tests instead check the resulting chassis force along its forward vector.
+  function forwardVec(bike) {
+    return bike.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
+  }
+
+  it('zeroes the rear wheel engineForce, now that propulsion is a direct chassis force', () => {
     const bike = createBike();
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
-    expect(bike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(BOOST_ACCEL * BIKE_MASS);
+    expect(bike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBe(0);
   });
 
-  it('applies only baseline engine force (zero extra boost) while boosting with empty stamina', () => {
+  it('applies boost acceleration (superseding baseline) to the chassis while boosting with stamina available', () => {
+    const bike = createBike();
+    bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
+    const forward = forwardVec(bike);
+    expect(bike.body.force.x).toBeCloseTo(forward.x * BOOST_ACCEL * BIKE_MASS);
+    expect(bike.body.force.z).toBeCloseTo(forward.z * BOOST_ACCEL * BIKE_MASS);
+  });
+
+  it('applies only baseline acceleration (zero extra boost) to the chassis while boosting with empty stamina', () => {
     const bike = createBike();
     bike.stamina = 0;
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
-    expect(bike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(BASELINE_ACCEL * BIKE_MASS);
+    const forward = forwardVec(bike);
+    expect(bike.body.force.x).toBeCloseTo(forward.x * BASELINE_ACCEL * BIKE_MASS);
+    expect(bike.body.force.z).toBeCloseTo(forward.z * BASELINE_ACCEL * BIKE_MASS);
   });
 
-  it('applies only baseline engine force when not boosting', () => {
+  it('applies only baseline acceleration to the chassis when not boosting', () => {
     const bike = createBike();
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false });
-    expect(bike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(BASELINE_ACCEL * BIKE_MASS);
+    const forward = forwardVec(bike);
+    expect(bike.body.force.x).toBeCloseTo(forward.x * BASELINE_ACCEL * BIKE_MASS);
+    expect(bike.body.force.z).toBeCloseTo(forward.z * BASELINE_ACCEL * BIKE_MASS);
   });
 
   it('applies brake force to both real wheels while braking, and zero once released', () => {
@@ -352,7 +375,7 @@ describe('BikeController longitudinal dynamics on real sloped ground (issue #66:
     const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
     const dt = 1 / 60;
 
-    for (let i = 0; i < 300; i += 1) { // 5s — long enough to approach equilibrium
+    for (let i = 0; i < 300; i += 1) { // 5s — clearly under way, though not yet at equilibrium
       bike.applyInput(dt, noInput);
       world.step(dt);
     }
@@ -360,12 +383,24 @@ describe('BikeController longitudinal dynamics on real sloped ground (issue #66:
     const speedAt5s = bike.speed;
     expect(speedAt5s).toBeGreaterThan(2); // clearly not crawled to a stop
 
-    for (let i = 0; i < 60; i += 1) { // one further second
+    // The higher BASELINE_ACCEL/ROLLING_RESISTANCE_COEFF pairing (see their comments in
+    // BikeController.js) settles to a higher equilibrium (~7 m/s) than the old baseline,
+    // but over a longer time constant (~15-20s, not ~5s) — so the convergence check below
+    // needs a longer run and a looser tolerance than just re-checking 1s later.
+    for (let i = 0; i < 900; i += 1) { // 15 further seconds — well past the 5s mark
       bike.applyInput(dt, noInput);
       world.step(dt);
     }
     bike.syncAfterStep(dt);
-    expect(bike.speed).toBeCloseTo(speedAt5s, 0); // settled near equilibrium, not still decaying
+    const speedAt20s = bike.speed;
+    expect(speedAt20s).toBeGreaterThan(speedAt5s); // still climbing toward equilibrium, not decaying
+
+    for (let i = 0; i < 120; i += 1) { // 2 further seconds
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+    expect(bike.speed).toBeCloseTo(speedAt20s, 0); // settled near equilibrium by 20s
   });
 
   it('decelerates on flat ground toward the baseline cruise once boost stops (not to a stop, since baseline is still present)', () => {
@@ -378,7 +413,7 @@ describe('BikeController longitudinal dynamics on real sloped ground (issue #66:
     // Build up real speed via boosting (rather than seeding body.velocity directly) so
     // wheel rotation state matches chassis speed — an artificial velocity jump creates a
     // large, unrepresentative wheel-slip transient that swamps the effect under test.
-    // Long enough (6s) that speed clears the baseline-alone equilibrium (~4.5-5 m/s, see
+    // Long enough (6s) that speed clears the baseline-alone equilibrium (~7 m/s, see
     // BASELINE_ACCEL's comment) — otherwise releasing boost would still show baseline
     // accelerating the bike further rather than decelerating it.
     for (let i = 0; i < 360; i += 1) {
@@ -426,6 +461,50 @@ describe('BikeController longitudinal dynamics on real sloped ground (issue #66:
 
     expect(brakingSpeed).toBeLessThan(coastingSpeed);
   });
+
+  it("climbs a real Cut-Gate-grade slope on baseline power alone (issue: can't go uphill)", () => {
+    // Negative slope coefficient = climbing (see the descending-slope comment above) —
+    // this matches Cut Gate's real ~19% grade climbs.
+    const slope = -0.19;
+    createGroundBody(world, { slope });
+    terrain = { getHeightAt: (x, z) => slope * z };
+    const bike = createBike();
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 60; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+    const speedAfter1s = bike.speed;
+
+    for (let i = 0; i < 300; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+
+    expect(bike.speed).toBeGreaterThan(speedAfter1s); // still gaining speed, not stalled
+    expect(bike.forwardSpeed).toBeGreaterThan(1); // genuinely climbing, not crawling/rolling back
+  });
+
+  it('does not roll backward on a steeper-than-Cut-Gate climb, even if it stalls', () => {
+    const slope = -0.30; // steeper than any real route grade — a "genuine struggle" case
+    createGroundBody(world, { slope });
+    terrain = { getHeightAt: (x, z) => slope * z };
+    const bike = createBike();
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
+    const dt = 1 / 60;
+
+    for (let i = 0; i < 300; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+
+    expect(bike.forwardSpeed).toBeGreaterThan(-0.1); // essentially holding position, not rolling back
+  });
 });
 
 describe('BikeController roll stability (issue #66: outrigger wheels resist tipping during normal riding)', () => {
@@ -442,7 +521,55 @@ describe('BikeController roll stability (issue #66: outrigger wheels resist tipp
     bike.syncAfterStep(dt);
 
     const up = bike.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
-    expect(up.y).toBeGreaterThan(0.5); // still mostly upright, not tipped onto its side
+    // Tightened from 0.5 now that applyUprightCorrection() actively resists tipping under
+    // hard steering + boost (real measured value ~0.99).
+    expect(up.y).toBeGreaterThan(0.9); // still mostly upright, not tipped onto its side
+  });
+
+  it('recovers from a moderate bump-induced roll back toward upright with no input', () => {
+    createGroundBody(world);
+    const bike = createBike();
+    const dt = 1 / 60;
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
+
+    for (let i = 0; i < 30; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+
+    // A one-time roll impulse (a routine bump/off-camber landing, not a genuine crash) —
+    // settles to a moderate tilt well under UPRIGHT_CORRECTION_MAX_TILT (~57 degrees).
+    bike.body.angularVelocity.z += 3;
+
+    for (let i = 0; i < 120; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+
+    const up = bike.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    expect(up.y).toBeGreaterThan(0.9); // recovered back toward upright
+  });
+
+  it('does not pull a tilt past UPRIGHT_CORRECTION_MAX_TILT back upright (genuine crashes still happen)', () => {
+    createGroundBody(world);
+    const bike = createBike();
+    const dt = 1 / 60;
+
+    // ~80 degrees — past the ~57-degree correction cutoff, so this should read as a real
+    // crash the assist doesn't paper over.
+    const tilt = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(0, 0, 1), (80 * Math.PI) / 180);
+    bike.body.quaternion.set(tilt.x, tilt.y, tilt.z, tilt.w);
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
+
+    for (let i = 0; i < 60; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+    }
+    bike.syncAfterStep(dt);
+
+    const up = bike.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    expect(up.y).toBeLessThan(0.5); // not corrected back upright — a real crash sticks
   });
 });
 
@@ -478,7 +605,7 @@ describe('BikeController stamina', () => {
     expect(bike.stamina).toBe(0);
   });
 
-  it('adds a clear engine-force delta over baseline while boosting with stamina, and none with stamina empty', () => {
+  it('adds a clear chassis-force delta over baseline while boosting with stamina, and none with stamina empty', () => {
     const boostInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
 
     const fullStaminaBike = createBike();
@@ -488,8 +615,10 @@ describe('BikeController stamina', () => {
     emptyStaminaBike.stamina = 0;
     emptyStaminaBike.applyInput(1, boostInput);
 
-    const boostedForce = fullStaminaBike.vehicle.wheelInfos[WHEEL_REAR].engineForce;
-    const baselineOnlyForce = emptyStaminaBike.vehicle.wheelInfos[WHEEL_REAR].engineForce;
+    // Propulsion is a direct chassis force now (see the propulsion/braking describe block
+    // above), so compare force magnitude rather than the always-0 rear wheel engineForce.
+    const boostedForce = fullStaminaBike.body.force.length();
+    const baselineOnlyForce = emptyStaminaBike.body.force.length();
     expect(baselineOnlyForce).toBeCloseTo(BASELINE_ACCEL * BIKE_MASS);
     expect(boostedForce).toBeCloseTo(BOOST_ACCEL * BIKE_MASS);
     expect(boostedForce).toBeGreaterThan(baselineOnlyForce);
@@ -906,7 +1035,7 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
     expect(bike.maxSpeed).toBe(MAX_SPEED);
   });
 
-  it('applies a stronger baseline and boost engine force under the ebike preset than default', () => {
+  it('applies a stronger baseline and boost chassis force under the ebike preset than default', () => {
     const defaultBike = createBike();
     const ebike = new BikeController(
       scene,
@@ -921,19 +1050,22 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
     const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
     const boostInput = { ...noInput, boost: true };
 
+    // Propulsion is a direct chassis force now (see the propulsion/braking describe block
+    // above), so compare force magnitude rather than the always-0 rear wheel engineForce.
+    // body.applyForce accumulates rather than overwrites, so body.force is reset between
+    // measurements here — applyInput() itself is called fresh each time in real gameplay
+    // (once per step, immediately followed by world.step(), which clears accumulated force).
     defaultBike.applyInput(1 / 60, noInput);
     ebike.applyInput(1 / 60, noInput);
-    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(EBIKE_BASELINE_ACCEL * BIKE_MASS);
-    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeGreaterThan(
-      defaultBike.vehicle.wheelInfos[WHEEL_REAR].engineForce,
-    );
+    expect(ebike.body.force.length()).toBeCloseTo(EBIKE_BASELINE_ACCEL * BIKE_MASS);
+    expect(ebike.body.force.length()).toBeGreaterThan(defaultBike.body.force.length());
 
+    defaultBike.body.force.set(0, 0, 0);
+    ebike.body.force.set(0, 0, 0);
     defaultBike.applyInput(1 / 60, boostInput);
     ebike.applyInput(1 / 60, boostInput);
-    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeCloseTo(EBIKE_BOOST_ACCEL * BIKE_MASS);
-    expect(ebike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBeGreaterThan(
-      defaultBike.vehicle.wheelInfos[WHEEL_REAR].engineForce,
-    );
+    expect(ebike.body.force.length()).toBeCloseTo(EBIKE_BOOST_ACCEL * BIKE_MASS);
+    expect(ebike.body.force.length()).toBeGreaterThan(defaultBike.body.force.length());
   });
 
   it("clamps speed at the ebike preset's own higher maxSpeed rather than the default MAX_SPEED", () => {
