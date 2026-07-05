@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { buildRouteOverlay, routePointToWorld } from './RouteOverlay.js';
+import { buildRouteOverlay, routePointToWorld, computeSpawnYaw } from './RouteOverlay.js';
 
 const ROUTE_HEIGHT_OFFSET = 0.16; // matches RouteOverlay.js's ROUTE_STYLE.heightOffset
 
@@ -8,6 +8,34 @@ describe('routePointToWorld', () => {
   it('maps e -> x and negates n -> z', () => {
     expect(routePointToWorld({ e: 12, n: -7 })).toEqual({ x: 12, z: 7 });
     expect(routePointToWorld({ e: 3, n: 4 })).toEqual({ x: 3, z: -4 });
+  });
+});
+
+describe('computeSpawnYaw', () => {
+  it('faces from the first point toward the second (east: +x -> yaw +90deg)', () => {
+    const routeData = { points: [{ e: 0, n: 0 }, { e: 10, n: 0 }] };
+    expect(computeSpawnYaw(routeData)).toBeCloseTo(Math.PI / 2);
+  });
+
+  it('faces south (n decreases -> world +z -> yaw 0)', () => {
+    const routeData = { points: [{ e: 0, n: 10 }, { e: 0, n: 0 }] };
+    expect(computeSpawnYaw(routeData)).toBeCloseTo(0);
+  });
+
+  it('matches the forward = (sin(yaw), 0, cos(yaw)) convention for an arbitrary heading', () => {
+    const routeData = { points: [{ e: 0, n: 0 }, { e: 3, n: -4 }] };
+    const yaw = computeSpawnYaw(routeData);
+    const a = routePointToWorld(routeData.points[0]);
+    const b = routePointToWorld(routeData.points[1]);
+    const dist = Math.hypot(b.x - a.x, b.z - a.z);
+    expect(Math.sin(yaw) * dist).toBeCloseTo(b.x - a.x);
+    expect(Math.cos(yaw) * dist).toBeCloseTo(b.z - a.z);
+  });
+
+  it('falls back to 0 for fewer than two points or coincident first two points', () => {
+    expect(computeSpawnYaw({ points: [{ e: 5, n: 5 }] })).toBe(0);
+    expect(computeSpawnYaw({ points: [] })).toBe(0);
+    expect(computeSpawnYaw({ points: [{ e: 1, n: 1 }, { e: 1, n: 1 }] })).toBe(0);
   });
 });
 

@@ -979,6 +979,41 @@ describe('BikeController.respawn (issue #81)', () => {
   });
 });
 
+describe('BikeController spawn yaw (facing down the track)', () => {
+  it('faces the spawnPoint.yaw heading at construction, and falls back to 0 when omitted', () => {
+    const facingBike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0, yaw: 1.2 });
+    expect(facingBike.yaw).toBeCloseTo(1.2);
+
+    const defaultBike = createBike();
+    expect(defaultBike.yaw).toBe(0);
+  });
+
+  it('restores the original spawnPoint.yaw (not 0) after respawn()', () => {
+    const bike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0, yaw: 0.8 });
+
+    bike.yaw = -2;
+    bike.respawn();
+
+    expect(bike.yaw).toBeCloseTo(0.8);
+  });
+
+  it('settles physically facing the requested spawnPoint.yaw heading, not 180 degrees opposite (regression: setBodyQuaternionFromTerrain sets the chassis local +Z, but yaw is read from local -Z)', () => {
+    createGroundBody(world);
+    const requestedYaw = 0.8;
+    const bike = new BikeController(scene, world, camera, terrain, { x: 0, z: 0, yaw: requestedYaw });
+    const dt = 1 / 60;
+    const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
+
+    for (let i = 0; i < 3; i += 1) {
+      bike.applyInput(dt, noInput);
+      world.step(dt);
+      bike.syncAfterStep(dt);
+    }
+
+    expect(bike.yaw).toBeCloseTo(requestedYaw, 0);
+  });
+});
+
 describe('BikeController.teleport (issue #81)', () => {
   it('moves the bike and zeroes velocity/grounding state, leaving yaw/speed/stamina untouched', () => {
     const constantHeightTerrain = { getHeightAt: () => 5 };

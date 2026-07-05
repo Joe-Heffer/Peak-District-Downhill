@@ -374,7 +374,21 @@ export class BikeController {
     this.baselineAccel = preset.baselineAccel;
     this.boostAccel = preset.boostAccel;
     this.maxSpeed = preset.maxSpeed;
-    this.yaw = 0;
+    // Faces down the track from the start (see RouteOverlay.js's computeSpawnYaw) rather
+    // than a fixed heading — falls back to 0 for callers (e.g. existing tests/devtools
+    // teleport) that pass a plain {x, z} with no yaw.
+    this.spawnYaw = spawnPoint.yaw ?? 0;
+    // setBodyQuaternionFromTerrain's own `yaw` parameter sets the chassis's local +Z
+    // heading, but this.yaw/spawnYaw (read back each frame in syncAfterStep from the
+    // chassis's local -Z — see MESH_YAW_OFFSET above) track exactly half a turn opposite,
+    // so a real requested heading needs a -Math.PI compensation to land the chassis
+    // actually facing it. Only applied when a heading was actually requested: the
+    // longstanding no-yaw default (spawnPoint.yaw undefined, e.g. every pre-existing
+    // test/devtools spawn) must keep feeding a literal 0 straight through, since every
+    // sloped-terrain test's climb/descend convention ("direction of travel = local -Z")
+    // is calibrated against that exact literal value.
+    this.spawnQuaternionYaw = typeof spawnPoint.yaw === 'number' ? this.spawnYaw - Math.PI : 0;
+    this.yaw = this.spawnYaw;
     this.speed = 0;
     this.forwardSpeed = 0;
     this.stamina = MAX_STAMINA;
@@ -442,7 +456,13 @@ export class BikeController {
     // Gate route's cambered start) rather than always dead level — dropping a level
     // chassis onto a real off-camber cell creates an immediate asymmetric suspension
     // torque the soft outriggers below aren't tuned to catch from a dead stop.
-    setBodyQuaternionFromTerrain(this.body, terrain.getHeightAt, spawnPoint.x, spawnPoint.z, 0);
+    setBodyQuaternionFromTerrain(
+      this.body,
+      terrain.getHeightAt,
+      spawnPoint.x,
+      spawnPoint.z,
+      this.spawnQuaternionYaw,
+    );
     // Rotation is fully free (issue #66): roll/pitch/yaw all emerge from wheel contact
     // forces instead of being hand-set, so the bike can genuinely tip over — see the
     // physics constants comment above for why the outrigger wheels exist, and
@@ -518,9 +538,15 @@ export class BikeController {
     this.body.position.set(this.spawnPoint.x, spawnY, this.spawnPoint.z);
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
-    setBodyQuaternionFromTerrain(this.body, this.terrain.getHeightAt, this.spawnPoint.x, this.spawnPoint.z, 0);
+    setBodyQuaternionFromTerrain(
+      this.body,
+      this.terrain.getHeightAt,
+      this.spawnPoint.x,
+      this.spawnPoint.z,
+      this.spawnQuaternionYaw,
+    );
     this.resetVehicleControls();
-    this.yaw = 0;
+    this.yaw = this.spawnYaw;
     this.speed = 0;
     this.forwardSpeed = 0;
     this.stamina = MAX_STAMINA;

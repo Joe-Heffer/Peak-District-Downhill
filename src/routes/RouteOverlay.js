@@ -21,6 +21,24 @@ export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/route
   return response.json();
 }
 
+// Heading (world-Y-axis yaw, same convention as BikeController's forward =
+// (sin(yaw), 0, cos(yaw))) from the route's first point toward its second, so the bike
+// can spawn already facing down the track instead of always at a fixed yaw of 0. Falls
+// back to 0 (unrotated) for a degenerate route — fewer than two points, or the first two
+// points coinciding — rather than feeding atan2 a zero vector.
+export function computeSpawnYaw(routeData) {
+  const points = routeData.points;
+  if (!points || points.length < 2) return 0;
+
+  const a = routePointToWorld(points[0]);
+  const b = routePointToWorld(points[1]);
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  if (dx === 0 && dz === 0) return 0;
+
+  return Math.atan2(dx, dz);
+}
+
 // Renders the ridden Cut Gate route as a ground-level rocky ribbon (same texture/
 // material as the surrounding paths network) — the surface the player actually rides
 // along, not a decorative overhead marker. Not tied to any gameplay/checkpoint logic.
