@@ -719,12 +719,15 @@ export class BikeController {
 
     let jumped = false;
     if (inputState.jump && this.isGrounded()) {
-      // Applied at the chassis's own center of mass (this.body.position) so the impulse
-      // can't induce an unwanted spin now that rotation is free.
-      this.body.applyImpulse(
-        new CANNON.Vec3(0, JUMP_LAUNCH_VELOCITY * BIKE_MASS, 0),
-        this.body.position,
-      );
+      // cannon-es's applyImpulse takes its second argument as a point *relative to the
+      // center of mass*, not a world-space point (unlike applyForce's worldPoint) — so
+      // passing this.body.position here (as previous code did) used the chassis's actual
+      // world coordinates as a lever arm, and on this terrain's world-space coordinate
+      // grid (positions can be hundreds/thousands of metres from the origin) that produced
+      // a spurious multi-thousand-rad/s angular velocity spike on every jump (issue #199:
+      // "jump blasts us into another dimension"). Omitting the point (defaults to the
+      // zero vector, i.e. true center of mass) is what actually avoids inducing spin.
+      this.body.applyImpulse(new CANNON.Vec3(0, JUMP_LAUNCH_VELOCITY * BIKE_MASS, 0));
       jumped = true;
     }
     inputState.jump = false;

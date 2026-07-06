@@ -314,6 +314,25 @@ describe('BikeController.applyInput propulsion/braking (issue #66: real wheel fo
     expect(airborneInput.jump).toBe(false);
   });
 
+  it('jumps straight up without inducing spin far from the world origin (issue #199)', () => {
+    // Real courses place the chassis hundreds/thousands of metres from (0, 0, 0) — a
+    // regression test spawning at the default (0, 0) wouldn't have caught issue #199,
+    // where the jump impulse's lever arm was accidentally the chassis's absolute world
+    // position (cannon-es's applyImpulse treats its point argument as already relative
+    // to the center of mass) rather than zero.
+    createGroundBody(world);
+    const bike = createBike({ x: 500, z: -1200 });
+    const dt = 1 / 60;
+    for (let i = 0; i < 30; i += 1) world.step(dt); // settle onto the ground
+    expect(bike.isGrounded()).toBe(true);
+
+    const groundedInput = { steerLeft: false, steerRight: false, jump: true, brake: false };
+    bike.applyInput(dt, groundedInput);
+
+    expect(bike.body.angularVelocity.length()).toBeCloseTo(0);
+    expect(bike.body.velocity.y).toBeCloseTo(JUMP_LAUNCH_VELOCITY, 1);
+  });
+
   it('keeps moving under boost input after sitting idle long enough that a sleep-prone body would freeze', () => {
     // Mirrors setupWorld.js's real config: with world.allowSleep on and the default 1s
     // sleepTimeLimit, a body resting below the speed threshold would fall fully asleep
