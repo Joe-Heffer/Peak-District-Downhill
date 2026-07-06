@@ -18,11 +18,12 @@ import { createMiniMap } from './ui/MiniMap.js';
 import { createScoreTracker } from './scoring/ScoreTracker.js';
 import { createDevTools } from './devtools/DevTools.js';
 import { buildFeedbackIssueUrl } from './feedback/FeedbackUrl.js';
+import { COURSES } from './courses/courses.js';
+import { createCourseSelect } from './courses/CourseSelect.js';
 
 const TIRE_ROLL_VOLUME = 0.4;
 const MUSIC_VOLUME = 0.25;
 const MUSIC_MUTED_KEY = 'musicMuted';
-const LOCATION_AREA_NAME = 'Cut Gate, Peak District';
 const LOCATION_UPDATE_INTERVAL = 0.25;
 
 // `?bike=ebike` overrides the default bike preset (issue #110) — the "simple toggle"
@@ -42,7 +43,7 @@ function resumeAudioOnGesture() {
 
 const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
 
-function renderCredits(terrainData, routeData, landcoverData, pathsData, treesData) {
+function renderCredits(courseName, terrainData, routeData, landcoverData, pathsData, treesData) {
   const el = document.getElementById('credits');
   if (!el) return;
 
@@ -54,7 +55,7 @@ function renderCredits(terrainData, routeData, landcoverData, pathsData, treesDa
     treesData.placeholder
   ) {
     el.textContent =
-      `Placeholder terrain/route/landcover/paths/trees data (not real survey data) — run \`npm run terrain:build\` for the real Cut Gate dataset. ${BIKE_MODEL_CREDIT}`;
+      `Placeholder terrain/route/landcover/paths/trees data (not real survey data) — run \`npm run terrain:build\` for the real ${courseName} dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
@@ -66,7 +67,7 @@ function renderCredits(terrainData, routeData, landcoverData, pathsData, treesDa
 // data has no real area behind its hardcoded name — hide the HUD line in either case,
 // same spirit as renderCredits' placeholder branch. Not gated on landcoverData.placeholder
 // since landcover doesn't affect the grid origin or the route/area name.
-function updateLocation(el, terrainData, routeData, x, z) {
+function updateLocation(el, courseName, terrainData, routeData, x, z) {
   if (!el) return;
 
   if (terrainData.placeholder || routeData.placeholder) {
@@ -74,7 +75,7 @@ function updateLocation(el, terrainData, routeData, x, z) {
     return;
   }
 
-  el.textContent = `${LOCATION_AREA_NAME} · ${worldToGridRef(x, z, terrainData.origin)}`;
+  el.textContent = `${courseName}, Peak District · ${worldToGridRef(x, z, terrainData.origin)}`;
 }
 
 function setUpMuteButton(musicAudio) {
@@ -150,14 +151,18 @@ function setUpTiltButton(inputState) {
 async function init() {
   const devTools = createDevTools();
 
+  const course = await createCourseSelect(COURSES).show();
+  const courseDataUrl = (dir, suffix = '') =>
+    `${import.meta.env.BASE_URL}data/${dir}/${course.id}${suffix}.json`;
+
   const [terrainData, routeData, landcoverData, pathsData, treesData] = await Promise.all([
-    loadTerrainData(),
-    loadRouteData(),
-    loadLandcoverData(),
-    loadPathsData(),
-    loadTreesData(),
+    loadTerrainData(courseDataUrl('terrain')),
+    loadRouteData(courseDataUrl('routes')),
+    loadLandcoverData(courseDataUrl('terrain', '-landcover')),
+    loadPathsData(courseDataUrl('routes', '-paths')),
+    loadTreesData(courseDataUrl('terrain', '-trees')),
   ]);
-  renderCredits(terrainData, routeData, landcoverData, pathsData, treesData);
+  renderCredits(course.name, terrainData, routeData, landcoverData, pathsData, treesData);
 
   // yaw faces from the route's first point toward its second, so the bike spawns
   // already oriented down the track instead of at a fixed heading (see computeSpawnYaw).
@@ -169,7 +174,7 @@ async function init() {
   const comboValueEl = document.getElementById('combo-value');
   const scoreBestEl = document.getElementById('score-best');
   const scorePopupsEl = document.getElementById('score-popups');
-  updateLocation(locationEl, terrainData, routeData, spawnPoint.x, spawnPoint.z);
+  updateLocation(locationEl, course.name, terrainData, routeData, spawnPoint.x, spawnPoint.z);
   const miniMap = createMiniMap(terrainData, routeData);
   const scoreTracker = createScoreTracker();
 
@@ -248,7 +253,7 @@ async function init() {
       timeSinceLocationUpdate += dt;
       if (timeSinceLocationUpdate >= LOCATION_UPDATE_INTERVAL) {
         timeSinceLocationUpdate = 0;
-        updateLocation(locationEl, terrainData, routeData, bike.mesh.position.x, bike.mesh.position.z);
+        updateLocation(locationEl, course.name, terrainData, routeData, bike.mesh.position.x, bike.mesh.position.z);
       }
 
       devTools.update(dt);

@@ -29,11 +29,19 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 ## Structure
 
 - `index.html` — page shell, loads `src/main.js` as a module script.
-- `src/main.js` — async `init()`: loads baked terrain/route/landcover/trees JSON, then
-  wires up the scene, physics world, bike, and input, then runs the render/physics tick
-  loop. Also spawns the bike at `routeData.points[0]` and renders the in-game
-  credits/notice text (into `#credits`): a placeholder-data warning when any of those
-  datasets has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
+- `src/main.js` — async `init()`: shows the course-select overlay (`src/courses/`) and
+  awaits the player's choice, then loads that course's baked terrain/route/landcover/trees
+  JSON, then wires up the scene, physics world, bike, and input, then runs the
+  render/physics tick loop. Also spawns the bike at `routeData.points[0]` and renders the
+  in-game credits/notice text (into `#credits`): a placeholder-data warning when any of
+  those datasets has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
+- `src/courses/` — `courses.js` is the course registry (currently one entry, Cut Gate,
+  manually maintained until #47 generalizes `tools/terrain/` into a multi-location
+  pipeline that could generate it instead); `CourseSelect.js` is the pre-run overlay that
+  lets the player pick a course before `main.js` loads its data, remembering the last
+  choice in `localStorage`; `courseGeometry.js` projects each course's real-world BNG bbox
+  onto the overview map so marker positions stay derived from route data, not hardcoded
+  per-course pixels.
 - `src/scene/setupScene.js` — Three.js scene, camera, renderer, lighting. Does not build
   any ground mesh itself — `main.js` adds the loaded terrain mesh.
 - `src/physics/setupWorld.js` — cannon-es world and a `CANNON.Heightfield` ground body
