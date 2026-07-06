@@ -111,11 +111,29 @@ scattering them randomly along the route, by deriving a canopy height model from
 see issue #50. Reuses the same DTM tile(s) from step 1, plus a **second**, separately
 downloaded raster:
 
-1. Download the **LIDAR Composite DSM** (surface model — includes vegetation/buildings,
-   unlike the DTM) tile(s) covering `BNG_BBOX`, the same way as step 1's DTM download.
-2. Put the downloaded tile(s) in `tools/terrain/raw/dsm/` (gitignored, separate from the
+1. On the EA survey portal, select the **"LIDAR Composite First Return DSM"** product
+   (not "Composite DTM", not "Composite Last Return DSM", not "Point Cloud" — those are
+   easy to mis-pick from the dropdown). First Return is required, not Last Return:
+   first-pulse returns hit the tops of tree canopies, which is what `nDSM = DSM - DTM`
+   needs to find canopy apexes; Last Return tends to penetrate closer to the ground
+   through gaps in the canopy and would under-count tree heights.
+2. Download the tile(s) for the same 24 OS National Grid squares as the DTM in step 1
+   (covering `BNG_BBOX`) — as of this bbox, that's:
+   ```
+   SE10se  SE20sw
+   SK07ne  SK08se  SK09se
+   SK17ne  SK18ne  SK18nw  SK18se  SK19ne  SK19nw  SK19se  SK19sw
+   SK27nw  SK28ne  SK28nw  SK28se  SK28sw  SK29nw  SK29sw
+   SK38nw  SK39ne  SK39nw  SK39se  SK39sw
+   ```
+   (Derive this list yourself instead by running `ls tools/terrain/raw/*.tif` and
+   stripping the `_DTM_1m.tif` suffix — it must always match the DTM tiles you already
+   have, since `buildTrees.js` samples both rasters at the same eastings/northings. If
+   `BNG_BBOX` in `config.js` ever changes, regenerate this list the same way rather than
+   trusting the one above.)
+3. Put the downloaded tile(s) in `tools/terrain/raw/dsm/` (gitignored, separate from the
    DTM tiles in `tools/terrain/raw/` so the two rasters aren't confused with each other).
-3. Run:
+4. Run:
    ```bash
    npm run terrain:trees
    ```
