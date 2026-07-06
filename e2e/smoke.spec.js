@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
 
+// main.js now gates init() behind the course-select overlay — click the (only) course's
+// list entry to dismiss it before any test interacts with something init() sets up.
+async function selectFirstCourse(page) {
+  await page.locator('#course-select-list button').first().click();
+}
+
 test('game loads without errors, renders a canvas, and shows the correct credits', async ({
   page,
   request,
@@ -20,6 +26,7 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
   await page.goto('./');
+  await selectFirstCourse(page);
 
   const canvas = page.locator('#app canvas');
   await expect(canvas).toBeVisible();
@@ -74,6 +81,7 @@ test('mute button toggles aria-pressed', async ({ page }) => {
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
   await page.goto('./');
+  await selectFirstCourse(page);
 
   const muteButton = page.locator('#mute-btn');
   await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
@@ -94,6 +102,7 @@ test('tilt button reflects tilt-steering support in this browser', async ({ page
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
   await page.goto('./');
+  await selectFirstCourse(page);
 
   const supported = await page.evaluate(() => typeof window.DeviceOrientationEvent !== 'undefined');
   const tiltButton = page.locator('#tilt-btn');
@@ -117,6 +126,7 @@ test('feedback button opens a prefilled GitHub issue in a new tab', async ({ pag
   // A leading slash would resolve against the server root, discarding the GitHub Pages
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
   await page.goto('./');
+  await selectFirstCourse(page);
 
   // Intercept and abort the outbound request instead of letting it hit the real
   // github.com — the button's job is producing the right URL, not GitHub loading it,
@@ -160,6 +170,9 @@ test('devtools panel toggles with the backtick key', async ({ page }) => {
   // subpath baked into baseURL under CI — use a relative path so it stays under baseURL.
   await page.goto('./');
 
+  // No selectFirstCourse() call needed here: createDevTools() wires the backtick-key
+  // listener before init() awaits the course-select overlay, so it works regardless of
+  // whether a course has been picked yet.
   const panel = page.locator('#devtools');
   await expect(panel).toBeHidden();
 
