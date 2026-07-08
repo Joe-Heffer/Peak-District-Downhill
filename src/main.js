@@ -12,6 +12,7 @@ import { createRockTrackMaterial } from './terrain/RockTrackTexture.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld, computeSpawnYaw } from './routes/RouteOverlay.js';
 import { loadPathsData, buildPathsOverlay } from './routes/PathsOverlay.js';
 import { buildScenery } from './scenery/Scenery.js';
+import { buildGroundMist } from './scene/GroundMist.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
@@ -178,7 +179,7 @@ async function init() {
   const miniMap = createMiniMap(terrainData, routeData);
   const scoreTracker = createScoreTracker();
 
-  const { scene, camera, renderer, isNight } = setupScene();
+  const { scene, camera, renderer, isNight, preset } = setupScene();
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const terrain = createTerrain(terrainData, landcoverData, maxAnisotropy);
   scene.add(terrain.mesh);
@@ -187,6 +188,8 @@ async function init() {
   scene.add(buildRouteOverlay(routeData, terrain, rockTrackMaterial));
   const scenery = buildScenery(routeData, treesData, terrain);
   scene.add(scenery);
+  const groundMist = buildGroundMist(terrain, preset);
+  scene.add(groundMist);
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(
@@ -235,6 +238,7 @@ async function init() {
       tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
 
       scenery.update(dt);
+      groundMist.update(camera, dt);
       miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
       if (staminaFillEl) {
         staminaFillEl.style.width = `${bike.stamina * 100}%`;

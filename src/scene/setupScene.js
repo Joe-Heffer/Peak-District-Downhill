@@ -40,7 +40,7 @@ export function setupScene() {
 
   // Sets scene.background (via the Sky mesh), scene.fog, light colour/intensity/position
   // and renderer tone mapping from a randomly chosen time-of-day/weather preset.
-  const { isNight } = applySky({ scene, camera, renderer, dirLight, hemiLight });
+  const { isNight, preset } = applySky({ scene, camera, renderer, dirLight, hemiLight });
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -48,5 +48,5 @@ export function setupScene() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, isNight };
+  return { scene, camera, renderer, isNight, preset };
 }
