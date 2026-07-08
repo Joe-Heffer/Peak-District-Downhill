@@ -57,10 +57,20 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
   decorative trail line on the terrain. `RouteOverlay.js` itself has no gameplay
   coupling, but `main.js` does use the route's first point (via the shared
   `routePointToWorld` helper) to place the bike's spawn.
-- `src/scenery/Scenery.js` — purely decorative `InstancedMesh` trees + rocks. Trees are
-  placed at real positions/heights from `public/data/terrain/cutgate-trees.json`
-  (LIDAR-derived canopy data, see below), not randomly — only rocks are still a seeded
-  random scatter within the route corridor.
+- `src/procgen/` — small composable pipeline (`sampleAlongRoute` → `jitterLateral` →
+  `filterByLandcover` → `groundPoints` → `toInstanceMatrices`, plus `buildRouteCurve`
+  and the shared `createRandom` seeded PRNG) for scattering content along the route.
+  Each stage is a pure function with its own colocated test; see
+  `docs/procedural-generation.md`. Currently consumed by `Scenery.js` (rocks) and
+  `Grass.js` (grass sprites) — new scattered content types should compose these stages
+  rather than writing bespoke scatter code.
+- `src/scenery/Scenery.js` — purely decorative `InstancedMesh` trees, rocks, and grass.
+  Trees are placed at real positions/heights from `public/data/terrain/cutgate-trees.json`
+  (LIDAR-derived canopy data, see below), not randomly; rocks and grass (`Grass.js`) are
+  seeded random scatters within the route corridor, built through `src/procgen/`.
+  `buildScenery()` returns a `THREE.Group` with an `update(dt)` attached, which advances
+  the shared `uTime` uniform grass's wind-sway shader reads — `main.js`'s `tick()` calls
+  it once per frame alongside `miniMap.update()`/`scoreTracker.update()`.
 - `vite.config.js` — sets `base` to `/Peak-District-Downhill/` under GitHub Actions
   (GitHub Pages subpath), `/` otherwise. Runtime `fetch()` calls for terrain/route data
   must build their URL from `import.meta.env.BASE_URL`, not a hardcoded leading slash,

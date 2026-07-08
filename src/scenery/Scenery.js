@@ -1,5 +1,12 @@
 import * as THREE from 'three';
 import { routePointToWorld } from '../routes/RouteOverlay.js';
+import { createRandom } from '../procgen/createRandom.js';
+import { buildRouteCurve } from '../procgen/routeCurve.js';
+import { sampleAlongRoute } from '../procgen/sampleAlongRoute.js';
+import { jitterLateral } from '../procgen/jitterLateral.js';
+import { groundPoints } from '../procgen/groundPoints.js';
+import { toInstanceMatrices } from '../procgen/toInstanceMatrices.js';
+import { buildGrass } from './Grass.js';
 
 const SAMPLE_SPACING = 10; // metres between candidate rock placement slots along the route
 export const LATERAL_MIN = 5;
@@ -11,21 +18,11 @@ const ROCK_SKIP_PROBABILITY = 0.67;
 const ROCK_COLOR = 0x8f8a80; // matches HeightmapTerrain's CLASS_COLORS.rock
 const TREE_COLOR = 0x3d4d30; // matches HeightmapTerrain's CLASS_COLORS.wood
 export const TREE_UNIT_HEIGHT = 3; // cone geometry's baked height; scaled per-instance below
+// Rocks use SEED, trees SEED + 1, grass SEED + 2 (see Grass.js) — one shared scheme so
+// every scattered content type gets its own reproducible random stream.
 const SEED = 1337;
 
 const UP = new THREE.Vector3(0, 1, 0);
-
-// mulberry32 — small seeded PRNG so scenery placement is reproducible across runs/tests
-// rather than reshuffling on every load.
-function createRandom(seed) {
-  let state = seed >>> 0;
-  return function random() {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function buildTreeGeometry() {
   const geometry = new THREE.ConeGeometry(1, TREE_UNIT_HEIGHT, 7);
@@ -46,47 +43,23 @@ function buildInstancedMesh(geometry, color, matrices) {
 }
 
 // Rocks are still a purely decorative random scatter within LATERAL_MIN..LATERAL_MAX of
-// the route corridor, grounded via terrain.getHeightAt.
+// the route corridor, grounded via terrain.getHeightAt — built through the shared
+// procgen pipeline (src/procgen/) rather than bespoke scatter code, so future scattered
+// content (mud patches, warning signs, ...) is a matter of composing the same stages.
 function buildRockMatrices(routeData, terrain) {
   const random = createRandom(SEED);
-
-  const routePoints = routeData.points.map((point) => {
-    const { x, z } = routePointToWorld(point);
-    return new THREE.Vector3(x, terrain.getHeightAt(x, z), z);
+  const curve = buildRouteCurve(routeData, terrain);
+  const samples = sampleAlongRoute(curve, SAMPLE_SPACING);
+  const candidates = jitterLateral(samples, random, {
+    lateralMin: LATERAL_MIN,
+    lateralMax: LATERAL_MAX,
+    skipProbability: ROCK_SKIP_PROBABILITY,
   });
+  const grounded = groundPoints(candidates, terrain);
 
-  const curve = new THREE.CatmullRomCurve3(routePoints);
-  const sampleCount = Math.max(2, Math.floor(curve.getLength() / SAMPLE_SPACING));
-  const spacedPoints = curve.getSpacedPoints(sampleCount);
-
-  const matrices = [];
-  const position = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-  const scale = new THREE.Vector3();
-
-  for (let i = 0; i < spacedPoints.length; i += 1) {
-    const t = THREE.MathUtils.clamp(i / (spacedPoints.length - 1), 0, 1);
-    const tangent = curve.getTangentAt(t);
-    const perpendicular = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-
-    for (const side of [-1, 1]) {
-      if (random() < ROCK_SKIP_PROBABILITY) continue;
-
-      const lateral = LATERAL_MIN + random() * (LATERAL_MAX - LATERAL_MIN);
-      const x = spacedPoints[i].x + perpendicular.x * lateral * side;
-      const z = spacedPoints[i].z + perpendicular.z * lateral * side;
-      const y = terrain.getHeightAt(x, z);
-
-      position.set(x, y, z);
-      quaternion.setFromAxisAngle(UP, random() * Math.PI * 2);
-      const instanceScale = 0.75 + random() * 0.75;
-      scale.set(instanceScale, instanceScale, instanceScale);
-
-      matrices.push(new THREE.Matrix4().compose(position, quaternion, scale));
-    }
-  }
-
-  return matrices;
+  return toInstanceMatrices(grounded, random, {
+    scaleFn: (point, rnd) => 0.75 + rnd() * 0.75,
+  });
 }
 
 // Trees are placed at real positions/heights derived from LIDAR canopy data (nDSM local
@@ -113,11 +86,22 @@ function buildTreeMatrices(treesData, terrain) {
   });
 }
 
-// Purely decorative. Static: transforms are set once via setMatrixAt, not touched again
-// per frame.
+// Purely decorative. Trees and rocks are static: transforms are set once via
+// setMatrixAt, not touched again per frame. Grass alone animates, driven by a single
+// shared uTime uniform (see Grass.js) updated once per frame via the returned
+// group.update(dt) — stashing a lifecycle hook directly on the Object3D, the same
+// pattern setupSky.js already uses for sky.onBeforeRender — so future scattered
+// content sharing this wind system (tree canopy sway, #180) needs no new plumbing.
 export function buildScenery(routeData, treesData, terrain) {
   const group = new THREE.Group();
   group.add(buildInstancedMesh(buildTreeGeometry(), TREE_COLOR, buildTreeMatrices(treesData, terrain)));
   group.add(buildInstancedMesh(buildRockGeometry(), ROCK_COLOR, buildRockMatrices(routeData, terrain)));
+
+  const windUniform = { value: 0 };
+  group.add(buildGrass(routeData, terrain, windUniform));
+  group.update = (dt) => {
+    windUniform.value += dt;
+  };
+
   return group;
 }

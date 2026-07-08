@@ -185,7 +185,8 @@ async function init() {
   const rockTrackMaterial = createRockTrackMaterial(maxAnisotropy);
   scene.add(buildPathsOverlay(pathsData, terrain, rockTrackMaterial));
   scene.add(buildRouteOverlay(routeData, terrain, rockTrackMaterial));
-  scene.add(buildScenery(routeData, treesData, terrain));
+  const scenery = buildScenery(routeData, treesData, terrain);
+  scene.add(scenery);
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(
@@ -233,6 +234,7 @@ async function init() {
       if (bike.hardLanding) audioManager.playOnce('crash', 0.8);
       tireRollAudio?.setVolume(bike.isGrounded() ? TIRE_ROLL_VOLUME : 0);
 
+      scenery.update(dt);
       miniMap.update(bike.mesh.position.x, bike.mesh.position.z, bike.yaw);
       if (staminaFillEl) {
         staminaFillEl.style.width = `${bike.stamina * 100}%`;

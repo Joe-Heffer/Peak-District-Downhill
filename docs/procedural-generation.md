@@ -12,20 +12,26 @@ This doc works out which of those pillars actually transfer to this game, what
 library would help, and what a "procedural content generation graph" would look like
 here — grounded in what the codebase already does, not aspirationally.
 
+**Status**: phase 1 (the procgen graph in `src/procgen/`, plus migrating rock
+scattering and a new grass-sprite layer onto it — issue #179) has landed. See
+"Proposed procgen graph" below, now describing what exists rather than a proposal.
+
 ## What already exists here
 
 This game is not a blank-slate procedural world: `tools/terrain/` bakes one real
 location (the Cut Gate descent) from LIDAR elevation + OSM route/landcover data into
 static JSON at build time (see the root `CLAUDE.md`), and that's a deliberate design
-choice, not a gap to fill in with generation. Even so, three genuinely procedural
+choice, not a gap to fill in with generation. Even so, several genuinely procedural
 seams already exist, each doing a smaller version of something in the video:
 
-- **Scattering** — `src/scenery/Scenery.js` uses a seeded PRNG (mulberry32, `SEED =
-  1337`) to scatter rocks along the route corridor, with tunable constants
-  (`SAMPLE_SPACING`, `ROCK_SKIP_PROBABILITY`, `LATERAL_MIN`/`LATERAL_MAX`). It's
-  bespoke, one-off scatter code written specifically for rocks — there's no reusable
-  pipeline behind it, so every future scattered content type (mud patches, warning
-  signs before jumps, puddles) would mean copy-pasting and re-tuning this script.
+- **Scattering** — `src/procgen/` is a small composable pipeline (`sampleAlongRoute`
+  → `jitterLateral` → `filterByLandcover` → `groundPoints` → `toInstanceMatrices`,
+  each a pure, independently-tested function) shared by every scattered content type.
+  `src/scenery/Scenery.js`'s rock scatter and `src/scenery/Grass.js`'s grass-sprite
+  placement (issue #179) both compose it, each with a seeded PRNG (mulberry32, via
+  `src/procgen/createRandom.js`) and their own tunable constants. Future scattered
+  content (mud patches, warning signs before jumps, puddles) is now a matter of
+  composing the same stages with new constants, not copy-pasting a bespoke script.
   Trees are the opposite case: their positions come straight from real LIDAR canopy
   detection (`cutgate-trees.json`), not generated, and should stay that way.
 - **Procedural texturing** — `src/terrain/HeightmapTerrain.js` colours each terrain
@@ -73,33 +79,36 @@ static JSON, and the runtime just consumes it. Trying to run a live procedural
 material graph in the browser would add real complexity for a game that renders one
 fixed terrain.
 
-## Proposed procgen graph
+## The procgen graph
 
 Not a generic engine — a small composable pipeline for scattering content along the
-route, living in a new `src/procgen/` module (unit tests colocated as
-`src/procgen/*.test.js`, matching the rest of the repo).
+route, living in `src/procgen/` (unit tests colocated as `src/procgen/*.test.js`,
+matching the rest of the repo).
 
-Shape: plain functions chained together, e.g.
+Shape: plain functions chained together —
 
 ```
-sampleAlongRoute(route, spacing)
-  → filterByLandcover(landcover, allowedClasses)
-  → filterBySlope(terrain, maxSlope)
-  → jitter(seededRandom, lateralRange)
-  → toInstanceMatrices()
+sampleAlongRoute(curve, spacing)
+  → jitterLateral(samples, random, {lateralMin, lateralMax, sides, skipProbability})
+  → filterByLandcover(points, terrain, allowedClasses)
+  → groundPoints(points, terrain)
+  → toInstanceMatrices(points, random, {randomizeYaw, scaleFn})
 ```
 
-Each stage takes and returns plain point/data arrays, so stages compose in any order
-and new stages (e.g. `filterByDistanceFromRoute`, `poissonThin`) can be added without
-touching existing ones.
+(`buildRouteCurve(routeData, terrain)` builds the grounded `CatmullRomCurve3` that
+feeds `sampleAlongRoute`.) Each stage takes and returns plain point/data arrays, so
+stages compose in any order and new stages (e.g. `filterBySlope`,
+`filterByDistanceFromRoute`, `poissonThin`) can be added without touching existing
+ones.
 
-**First migration**: rewrite `Scenery.js`'s rock scatter as a call through this
-pipeline, behaviour-preserving — same seed, same constants, `Scenery.test.js` should
-keep passing unmodified. Tree placement is explicitly *not* migrated, since tree
-positions are real LIDAR ground truth rather than generated data.
+**Landed**: `Scenery.js`'s rock scatter is a call through this pipeline, and
+`Scenery.js`'s grass sprites (`src/scenery/Grass.js`, issue #179) are the second
+consumer, proving it's genuinely reusable rather than rock-specific — see
+`docs/vegetation-rendering.md`. Tree placement is explicitly *not* migrated, since
+tree positions are real LIDAR ground truth rather than generated data.
 
 **Payoff**: future scattered content — mud patches on wet corners, warning signs
-before jumps, puddles — becomes composing 2-3 existing nodes instead of writing a new
+before jumps, puddles — is composing 2-3 existing stages instead of writing a new
 bespoke scatter script per feature.
 
 ## Procedural animation extension
@@ -113,7 +122,7 @@ slope/speed/boost/brake pose-blend as additional reactive terms.
 
 | Phase | Work | Tracking issue |
 | --- | --- | --- |
-| 1 | Procgen graph (`src/procgen/`) + migrate rock scattering onto it | Sub-issue A |
+| 1 | Procgen graph (`src/procgen/`) + migrate rock scattering onto it + grass sprites | Landed — issue #179 |
 | 2 | `simplex-noise` dependency; noise-blended landcover + procedural textures | Sub-issue B |
 | 3 | Rider secondary motion (bump/impact-reactive) | Sub-issue C |
 

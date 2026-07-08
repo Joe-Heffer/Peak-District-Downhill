@@ -1,9 +1,29 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildScenery, LATERAL_MIN, LATERAL_MAX, TREE_UNIT_HEIGHT } from './Scenery.js';
 import { routePointToWorld } from '../routes/RouteOverlay.js';
 
-const terrain = { getHeightAt: (x, z) => 100 + x * 0.01 - z * 0.005 };
+// Grass.js's buildGrass() generates a canvas texture, which needs a real DOM — not
+// available under this project's default `node` Vitest environment (see
+// vitest.config.js; same reason HeightmapTerrain.js's canvas-touching
+// buildTerrainMesh has no test coverage). Placement/geometry logic (buildGrassMatrices,
+// buildGrassClumpGeometry) is covered directly in Grass.test.js instead; here we only
+// need a stand-in InstancedMesh so buildScenery's own grouping/wind-wiring is testable.
+// vi.mock calls are hoisted above imports by vitest's transform, so this applies before
+// Scenery.js (which imports buildGrass from Grass.js) is evaluated above.
+vi.mock('./Grass.js', () => ({
+  buildGrass: (routeData, terrain, windUniform) => {
+    const mesh = new THREE.InstancedMesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial(), 3);
+    for (let i = 0; i < mesh.count; i += 1) mesh.setMatrixAt(i, new THREE.Matrix4());
+    mesh.material.userData.windUniform = windUniform;
+    return mesh;
+  },
+}));
+
+const terrain = {
+  getHeightAt: (x, z) => 100 + x * 0.01 - z * 0.005,
+  getLandcoverAt: () => 'grass',
+};
 const routeData = {
   points: [
     { e: 10, n: 5 },
@@ -51,15 +71,31 @@ function nearestDistanceToRoute(position) {
 }
 
 describe('buildScenery', () => {
-  it('returns a group with a tree InstancedMesh and a rock InstancedMesh', () => {
+  it('returns a group with a tree, rock, and grass InstancedMesh', () => {
     const group = buildScenery(routeData, treesData, terrain);
 
     expect(group).toBeInstanceOf(THREE.Group);
-    expect(group.children).toHaveLength(2);
+    expect(group.children).toHaveLength(3);
     expect(group.children[0]).toBeInstanceOf(THREE.InstancedMesh);
     expect(group.children[1]).toBeInstanceOf(THREE.InstancedMesh);
+    expect(group.children[2]).toBeInstanceOf(THREE.InstancedMesh);
     expect(group.children[0].count).toBe(treesData.trees.length);
     expect(group.children[1].count).toBeGreaterThan(0);
+    expect(group.children[2].count).toBeGreaterThan(0);
+  });
+
+  it('exposes update(dt) which advances the grass shader\'s shared wind uniform', () => {
+    const group = buildScenery(routeData, treesData, terrain);
+    const grassMesh = group.children[2];
+    const windUniform = grassMesh.material.userData.windUniform;
+
+    expect(typeof group.update).toBe('function');
+    expect(windUniform.value).toBe(0);
+
+    group.update(1 / 60);
+    group.update(1 / 60);
+
+    expect(windUniform.value).toBeCloseTo(2 / 60);
   });
 
   it('places one tree instance per treesData entry, grounded and sized from its data', () => {
