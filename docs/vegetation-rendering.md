@@ -117,8 +117,16 @@ loop over instances.
 
 | Phase | Work | Tracking issue |
 | --- | --- | --- |
-| 1 | Procedural grass sprite system (new `src/scenery/Grass.js`, generated texture, shared wind shader, corridor placement by landcover class) | Sub-issue A |
-| 2 | Tree canopy upgrade: replace cone geometry with trunk + cross-quad foliage canopy in `Scenery.js`, wired to the same wind uniform | Sub-issue B |
+| 1 | Procedural grass sprite system (`src/scenery/Grass.js`, generated texture, shared wind shader, corridor placement by landcover class via `src/procgen/`) | Landed — #179 |
+| 2 | Tree canopy upgrade: replace cone geometry with trunk + cross-quad foliage canopy in `Scenery.js`, wired to the same wind uniform | #180 |
+
+Phase 1 note: grass placement reuses `src/procgen/`'s `sampleAlongRoute` →
+`jitterLateral` → `filterByLandcover` → `groundPoints` → `toInstanceMatrices`
+pipeline — the same one `Scenery.js`'s rock scatter was migrated onto alongside this
+work (see `docs/procedural-generation.md`), rather than one-off scatter code. The
+shared `uTime` wind uniform is created and advanced in `Scenery.js` (`buildScenery`
+attaches an `update(dt)` to the returned group, called from `main.js`'s `tick()`), so
+phase 2's tree canopy sway can reuse it directly.
 
 Stretch, not currently justified by this game's scale (revisit only if grass/tree
 instance counts grow far beyond the current fixed-route corridor): octahedral
