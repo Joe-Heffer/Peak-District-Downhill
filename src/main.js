@@ -183,9 +183,14 @@ async function init() {
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   const terrain = createTerrain(terrainData, landcoverData, maxAnisotropy);
   scene.add(terrain.mesh);
-  const rockTrackMaterial = createRockTrackMaterial(maxAnisotropy);
-  scene.add(buildPathsOverlay(pathsData, terrain, rockTrackMaterial));
-  scene.add(buildRouteOverlay(routeData, terrain, rockTrackMaterial));
+  const pathsMaterial = createRockTrackMaterial(maxAnisotropy);
+  // Flat-shaded so the route ribbon's rock relief (RouteOverlay.js's
+  // ROUTE_STYLE.rockiness) reads as faceted chunks, matching the low-poly scattered
+  // rocks elsewhere in the scene — a separate material instance from pathsMaterial so
+  // this doesn't also facet the (flat, unperturbed) paths network.
+  const routeMaterial = createRockTrackMaterial(maxAnisotropy, { flatShading: true });
+  scene.add(buildPathsOverlay(pathsData, terrain, pathsMaterial));
+  scene.add(buildRouteOverlay(routeData, terrain, routeMaterial));
   const scenery = buildScenery(routeData, treesData, terrain);
   scene.add(scenery);
   const groundMist = buildGroundMist(terrain, preset);

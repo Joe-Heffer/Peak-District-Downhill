@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { buildScenery, LATERAL_MIN, LATERAL_MAX, TREE_UNIT_HEIGHT } from './Scenery.js';
+import {
+  buildScenery,
+  LATERAL_MIN,
+  LATERAL_MAX,
+  EDGE_ROCK_LATERAL_MIN,
+  EDGE_ROCK_LATERAL_MAX,
+  TREE_UNIT_HEIGHT,
+} from './Scenery.js';
 import { routePointToWorld } from '../routes/RouteOverlay.js';
 
 // Grass.js/Heather.js/Bracken.js's build*() functions generate canvas textures, which
@@ -25,7 +32,7 @@ vi.mock('./Bracken.js', () => ({ buildBracken: mockShrubBuilder(1) }));
 
 const terrain = {
   getHeightAt: (x, z) => 100 + x * 0.01 - z * 0.005,
-  getLandcoverAt: () => 'grass',
+  getLandcoverAt: () => 'track', // 'track' so the edge-rock band's filterByLandcover keeps instances
 };
 const routeData = {
   points: [
@@ -74,26 +81,27 @@ function nearestDistanceToRoute(position) {
 }
 
 describe('buildScenery', () => {
-  it('returns a group with tree, rock, grass, heather, and bracken InstancedMeshes', () => {
+  it('returns a group with tree, rock, edge-rock, grass, heather, and bracken InstancedMeshes', () => {
     const group = buildScenery(routeData, treesData, terrain);
 
     expect(group).toBeInstanceOf(THREE.Group);
-    expect(group.children).toHaveLength(5);
+    expect(group.children).toHaveLength(6);
     for (const child of group.children) {
       expect(child).toBeInstanceOf(THREE.InstancedMesh);
     }
     expect(group.children[0].count).toBe(treesData.trees.length);
-    expect(group.children[1].count).toBeGreaterThan(0);
-    expect(group.children[2].count).toBeGreaterThan(0); // grass
-    expect(group.children[3].count).toBeGreaterThan(0); // heather
-    expect(group.children[4].count).toBeGreaterThan(0); // bracken
+    expect(group.children[1].count).toBeGreaterThan(0); // rock
+    expect(group.children[2].count).toBeGreaterThan(0); // edge-rock
+    expect(group.children[3].count).toBeGreaterThan(0); // grass
+    expect(group.children[4].count).toBeGreaterThan(0); // heather
+    expect(group.children[5].count).toBeGreaterThan(0); // bracken
   });
 
   it('exposes update(dt) which advances one wind uniform shared by grass, heather, and bracken', () => {
     const group = buildScenery(routeData, treesData, terrain);
-    const grassUniform = group.children[2].material.userData.windUniform;
-    const heatherUniform = group.children[3].material.userData.windUniform;
-    const brackenUniform = group.children[4].material.userData.windUniform;
+    const grassUniform = group.children[3].material.userData.windUniform;
+    const heatherUniform = group.children[4].material.userData.windUniform;
+    const brackenUniform = group.children[5].material.userData.windUniform;
 
     expect(heatherUniform).toBe(grassUniform);
     expect(brackenUniform).toBe(grassUniform);
@@ -144,6 +152,18 @@ describe('buildScenery', () => {
       const distance = nearestDistanceToRoute(position);
       expect(distance).toBeGreaterThanOrEqual(LATERAL_MIN - 0.5);
       expect(distance).toBeLessThanOrEqual(LATERAL_MAX + 0.5);
+    }
+  });
+
+  it('grounds every edge-rock instance and keeps it within the tighter edge-band bounds', () => {
+    const group = buildScenery(routeData, treesData, terrain);
+    const edgeRockMesh = group.children[2];
+
+    for (const { position } of decomposeAll(edgeRockMesh)) {
+      expect(position.y).toBeCloseTo(terrain.getHeightAt(position.x, position.z));
+      const distance = nearestDistanceToRoute(position);
+      expect(distance).toBeGreaterThanOrEqual(EDGE_ROCK_LATERAL_MIN - 0.5);
+      expect(distance).toBeLessThanOrEqual(EDGE_ROCK_LATERAL_MAX + 0.5);
     }
   });
 

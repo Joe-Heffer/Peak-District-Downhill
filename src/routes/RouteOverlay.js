@@ -11,7 +11,37 @@ export { routePointToWorld };
 // than a well-trodden, lighter-worn strip of the same rocky ground. heightOffset sits
 // above every PATH_STYLES offset so the ridden route always renders visibly on top at
 // any junction/crossing with the surrounding network.
-const ROUTE_STYLE = { width: 2.2, color: 0xc9bb98, heightOffset: 0.16 };
+//
+// rockiness gives the ridden route (and only the ridden route — PathsOverlay.js's
+// styles don't set this) real cross-section relief instead of a flat 2-vertex-wide
+// plank; see buildRibbonArrays in ribbonGeometry.js for how it's consumed. Two noise
+// octaves: a coarser "rock lump" scale and a finer "gravel" scale. wavelengthCoarse is
+// deliberately not a simple multiple of ROCK_TEXTURE_TILE_METRES (1.5m) or this style's
+// own width (2.2m), avoiding a moiré beat between the geometric bump period and the
+// texture's own repeat. segments=4 gives 5 cross-section columns, ~0.55m apart.
+const ROUTE_STYLE = {
+  width: 2.2,
+  color: 0xc9bb98,
+  heightOffset: 0.16,
+  rockiness: {
+    segments: 4,
+    amplitudeCoarse: 0.05,
+    amplitudeFine: 0.02,
+    wavelengthCoarse: 0.8,
+    wavelengthFine: 0.22,
+    seed: 4242,
+  },
+};
+
+// Along-length sample spacing for the route ribbon only. The shared densifyPolyline
+// default (ribbonGeometry.js's MAX_RIBBON_SEGMENT_METRES, 2m) is tuned for UV/mip
+// reasons on a flat ribbon — far coarser than ROUTE_STYLE.rockiness's 0.22-0.8m noise
+// wavelengths, which would otherwise be undersampled along the route's length and read
+// as uncorrelated jitter row-to-row instead of a coherent rocky ripple running down the
+// trail. ~2 samples per coarse wavelength. Only applied to this route-local
+// densifyPolyline call, so PathsOverlay.js's ribbons (which don't opt into rockiness)
+// keep the cheaper shared default.
+const ROUTE_ROCKINESS_SEGMENT_METRES = 0.35;
 
 export async function loadRouteData(url = `${import.meta.env.BASE_URL}data/routes/cutgate.json`) {
   const response = await fetch(url);
@@ -59,7 +89,7 @@ export function buildRouteOverlay(routeData, terrain, material) {
   const ribbonPoints = curvePoints.map((p) => ({ e: p.x, n: -p.z }));
 
   const arrays = { positions: [], colors: [], uvs: [], indices: [] };
-  buildRibbonArrays(densifyPolyline(ribbonPoints), terrain, ROUTE_STYLE, arrays);
+  buildRibbonArrays(densifyPolyline(ribbonPoints, ROUTE_ROCKINESS_SEGMENT_METRES), terrain, ROUTE_STYLE, arrays);
 
   const geometry = finalizeRibbonGeometry(arrays);
   const mesh = new THREE.Mesh(geometry, material);
