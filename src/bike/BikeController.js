@@ -5,7 +5,12 @@ import { clamp, getGroundQuaternion } from '../terrain/HeightmapTerrain.js';
 
 const TURN_RATE = 2.2;
 const HARD_LANDING_VELOCITY = -8;
-const CAMERA_OFFSET = new THREE.Vector3(0, 3, -6);
+// Raised and pulled back from the old (0, 3, -6) chase position, and now looking at a
+// point above the bike rather than straight at it, so the camera pitches up toward the
+// horizon instead of down at the trail — trading a closer view of the bike for more of
+// the surrounding moorland/trees in frame while riding.
+const CAMERA_OFFSET = new THREE.Vector3(0, 4.5, -9);
+const CAMERA_LOOKAT_OFFSET = new THREE.Vector3(0, 1.6, 0);
 const CAMERA_LERP = 0.1;
 
 // Physics (issue #66): a CANNON.RaycastVehicle chassis + wheels, replacing the old
@@ -836,6 +841,6 @@ export class BikeController {
     const offset = CAMERA_OFFSET.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
     const targetPosition = this.mesh.position.clone().add(offset);
     this.camera.position.lerp(targetPosition, CAMERA_LERP);
-    this.camera.lookAt(this.mesh.position);
+    this.camera.lookAt(this.mesh.position.clone().add(CAMERA_LOOKAT_OFFSET));
   }
 }
