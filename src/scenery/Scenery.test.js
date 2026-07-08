@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { buildScenery, LATERAL_MIN, LATERAL_MAX, TREE_UNIT_HEIGHT } from './Scenery.js';
+import {
+  buildScenery,
+  LATERAL_MIN,
+  LATERAL_MAX,
+  EDGE_ROCK_LATERAL_MIN,
+  EDGE_ROCK_LATERAL_MAX,
+  TREE_UNIT_HEIGHT,
+} from './Scenery.js';
 import { routePointToWorld } from '../routes/RouteOverlay.js';
 
 // Grass.js's buildGrass() generates a canvas texture, which needs a real DOM — not
@@ -22,7 +29,7 @@ vi.mock('./Grass.js', () => ({
 
 const terrain = {
   getHeightAt: (x, z) => 100 + x * 0.01 - z * 0.005,
-  getLandcoverAt: () => 'grass',
+  getLandcoverAt: () => 'track', // 'track' so the edge-rock band's filterByLandcover keeps instances
 };
 const routeData = {
   points: [
@@ -71,22 +78,24 @@ function nearestDistanceToRoute(position) {
 }
 
 describe('buildScenery', () => {
-  it('returns a group with a tree, rock, and grass InstancedMesh', () => {
+  it('returns a group with a tree, rock, edge-rock, and grass InstancedMesh', () => {
     const group = buildScenery(routeData, treesData, terrain);
 
     expect(group).toBeInstanceOf(THREE.Group);
-    expect(group.children).toHaveLength(3);
+    expect(group.children).toHaveLength(4);
     expect(group.children[0]).toBeInstanceOf(THREE.InstancedMesh);
     expect(group.children[1]).toBeInstanceOf(THREE.InstancedMesh);
     expect(group.children[2]).toBeInstanceOf(THREE.InstancedMesh);
+    expect(group.children[3]).toBeInstanceOf(THREE.InstancedMesh);
     expect(group.children[0].count).toBe(treesData.trees.length);
     expect(group.children[1].count).toBeGreaterThan(0);
     expect(group.children[2].count).toBeGreaterThan(0);
+    expect(group.children[3].count).toBeGreaterThan(0);
   });
 
   it('exposes update(dt) which advances the grass shader\'s shared wind uniform', () => {
     const group = buildScenery(routeData, treesData, terrain);
-    const grassMesh = group.children[2];
+    const grassMesh = group.children[3];
     const windUniform = grassMesh.material.userData.windUniform;
 
     expect(typeof group.update).toBe('function');
@@ -133,6 +142,18 @@ describe('buildScenery', () => {
       const distance = nearestDistanceToRoute(position);
       expect(distance).toBeGreaterThanOrEqual(LATERAL_MIN - 0.5);
       expect(distance).toBeLessThanOrEqual(LATERAL_MAX + 0.5);
+    }
+  });
+
+  it('grounds every edge-rock instance and keeps it within the tighter edge-band bounds', () => {
+    const group = buildScenery(routeData, treesData, terrain);
+    const edgeRockMesh = group.children[2];
+
+    for (const { position } of decomposeAll(edgeRockMesh)) {
+      expect(position.y).toBeCloseTo(terrain.getHeightAt(position.x, position.z));
+      const distance = nearestDistanceToRoute(position);
+      expect(distance).toBeGreaterThanOrEqual(EDGE_ROCK_LATERAL_MIN - 0.5);
+      expect(distance).toBeLessThanOrEqual(EDGE_ROCK_LATERAL_MAX + 0.5);
     }
   });
 

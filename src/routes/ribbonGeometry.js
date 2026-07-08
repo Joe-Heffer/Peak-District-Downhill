@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fbmSample } from './ribbonNoise.js';
 
 // Metres per texture tile along a ribbon's length/width — shared by every ribbon
 // (route + paths) so the rocky texture reads at a consistent stone scale regardless
@@ -42,11 +43,30 @@ export function densifyPolyline(points, maxSegmentMetres = MAX_RIBBON_SEGMENT_ME
   return result;
 }
 
-// Appends one path's ribbon (a flat quad-strip following the terrain, textured with a
+// Appends one path's ribbon (a quad-strip following the terrain, textured with a
 // tiling rock texture) into the shared {positions, colors, uvs, indices} arrays.
 // Per-vertex perpendicular is the averaged normal of the incoming/outgoing segment
 // directions — simple, no miter-length clamping (acceptable v1 scope limit at this
 // path density, same spirit as fetchLandcover.js's documented multipolygon-skip limit).
+//
+// With style.rockiness unset, each sample gets exactly its 2 rail vertices (left/right
+// edge), same as a plain flat ribbon. With style.rockiness set (see RouteOverlay.js's
+// ROUTE_STYLE), each sample instead gets `segments + 1` cross-section vertices, and the
+// interior ones are lifted by coherent noise — see buildRockinessOffset below — so the
+// ribbon reads as embedded rock relief rather than a flat plank. segments=1 (the
+// default) makes the loop below degenerate to exactly the old 2-vertex-per-sample
+// behaviour and triangulation, which is what keeps every ribbon that doesn't opt into
+// rockiness (i.e. every PathsOverlay.js category) byte-identical to before this existed.
+function buildRockinessOffset(rockiness, x, z, edgeFalloff) {
+  const coarse = (fbmSample(x, z, rockiness.seed, rockiness.wavelengthCoarse) + 1) / 2;
+  const fine = (fbmSample(x, z, rockiness.seed + 1, rockiness.wavelengthFine) + 1) / 2;
+  // Remapped to [0,1] (not max(0, noise)-clamped) before scaling, so the relief is
+  // additive-only — the ribbon surface can never dip below the flat heightOffset
+  // baseline, which would otherwise risk it clipping into the terrain mesh underneath
+  // at a shallow offset, or undercutting the route-above-paths draw-order invariant.
+  return (coarse * rockiness.amplitudeCoarse + fine * rockiness.amplitudeFine) * edgeFalloff;
+}
+
 export function buildRibbonArrays(points, terrain, style, arrays) {
   const world = points.map((p) => routePointToWorld(p));
   if (world.length < 2) return;
@@ -54,7 +74,9 @@ export function buildRibbonArrays(points, terrain, style, arrays) {
   const color = new THREE.Color(style.color);
   const halfWidth = style.width / 2;
   const baseIndex = arrays.positions.length / 3;
-  const u = halfWidth / ROCK_TEXTURE_TILE_METRES;
+  const rockiness = style.rockiness ?? null;
+  const segments = rockiness ? rockiness.segments : 1;
+  const columns = segments + 1;
 
   let arcLength = 0;
   for (let i = 0; i < world.length; i += 1) {
@@ -67,7 +89,7 @@ export function buildRibbonArrays(points, terrain, style, arrays) {
     const perpZ = dirX / len;
 
     const { x, z } = world[i];
-    const y = terrain.getHeightAt(x, z) + style.heightOffset;
+    const baseY = terrain.getHeightAt(x, z) + style.heightOffset;
 
     if (i > 0) {
       const prevWorld = world[i - 1];
@@ -75,18 +97,32 @@ export function buildRibbonArrays(points, terrain, style, arrays) {
     }
     const v = arcLength / ROCK_TEXTURE_TILE_METRES;
 
-    arrays.positions.push(x + perpX * halfWidth, y, z + perpZ * halfWidth);
-    arrays.positions.push(x - perpX * halfWidth, y, z - perpZ * halfWidth);
-    arrays.colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
-    arrays.uvs.push(u, v, -u, v);
+    for (let c = 0; c < columns; c += 1) {
+      const frac = c / segments;
+      const offset = halfWidth - frac * style.width; // +halfWidth (left rail) .. -halfWidth (right rail)
+      const vx = x + perpX * offset;
+      const vz = z + perpZ * offset;
+
+      let y = baseY;
+      if (rockiness) {
+        const edgeFalloff = Math.sin(Math.PI * frac); // 0 at both rails, 1 at mid-width
+        y = baseY + buildRockinessOffset(rockiness, vx, vz, edgeFalloff);
+      }
+
+      arrays.positions.push(vx, y, vz);
+      arrays.colors.push(color.r, color.g, color.b);
+      arrays.uvs.push(offset / ROCK_TEXTURE_TILE_METRES, v);
+    }
   }
 
   for (let i = 0; i < world.length - 1; i += 1) {
-    const a = baseIndex + i * 2;
-    const b = a + 1;
-    const c = a + 2;
-    const d = a + 3;
-    arrays.indices.push(a, b, d, a, d, c);
+    for (let c = 0; c < columns - 1; c += 1) {
+      const p00 = baseIndex + i * columns + c;
+      const p01 = p00 + 1;
+      const p10 = baseIndex + (i + 1) * columns + c;
+      const p11 = p10 + 1;
+      arrays.indices.push(p00, p01, p11, p00, p11, p10);
+    }
   }
 }
 

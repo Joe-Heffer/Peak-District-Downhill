@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRouteOverlay, routePointToWorld, computeSpawnYaw } from './RouteOverlay.js';
 
 const ROUTE_HEIGHT_OFFSET = 0.16; // matches RouteOverlay.js's ROUTE_STYLE.heightOffset
+const ROUTE_COLUMNS = 5; // matches RouteOverlay.js's ROUTE_STYLE.rockiness.segments (4) + 1
 
 describe('routePointToWorld', () => {
   it('maps e -> x and negates n -> z', () => {
@@ -64,18 +65,25 @@ describe('buildRouteOverlay', () => {
     // buildRouteOverlay resamples the CatmullRomCurve3 for the rendered ribbon, but a
     // Catmull-Rom curve always passes exactly through its own control points, so the
     // densified geometry's first/last centerline vertices coincide with routeData's
-    // first/last points. Each centerline sample emits two ribbon rail vertices (offset
-    // +-halfWidth), so the centerline is their average.
+    // first/last points. Each centerline sample emits ROUTE_COLUMNS ribbon
+    // cross-section vertices (rockiness relief adds interior columns beyond the plain
+    // left/right rail — see RouteOverlay.js's ROUTE_STYLE.rockiness.segments), so the
+    // centerline is the average of the first (left rail) and last (right rail) column
+    // of each row — the rail columns sit exactly on the flat baseline regardless of
+    // rockiness (edgeFalloff is zero there), so this still holds.
     const mesh = buildRouteOverlay(routeData, terrain, material);
     const positions = mesh.geometry.attributes.position.array;
+    const rowStride = ROUTE_COLUMNS * 3;
 
     const expectedFirst = routePointToWorld(routeData.points[0]);
     const expectedLast = routePointToWorld(routeData.points[routeData.points.length - 1]);
 
+    const firstLeft = 0;
+    const firstRight = (ROUTE_COLUMNS - 1) * 3;
     const firstCenter = {
-      x: (positions[0] + positions[3]) / 2,
-      y: (positions[1] + positions[4]) / 2,
-      z: (positions[2] + positions[5]) / 2,
+      x: (positions[firstLeft] + positions[firstRight]) / 2,
+      y: (positions[firstLeft + 1] + positions[firstRight + 1]) / 2,
+      z: (positions[firstLeft + 2] + positions[firstRight + 2]) / 2,
     };
     expect(firstCenter.x).toBeCloseTo(expectedFirst.x);
     expect(firstCenter.z).toBeCloseTo(expectedFirst.z);
@@ -83,11 +91,13 @@ describe('buildRouteOverlay', () => {
       terrain.getHeightAt(expectedFirst.x, expectedFirst.z) + ROUTE_HEIGHT_OFFSET,
     );
 
-    const lastIndex = positions.length - 6;
+    const lastRowStart = positions.length - rowStride;
+    const lastLeft = lastRowStart;
+    const lastRight = lastRowStart + (ROUTE_COLUMNS - 1) * 3;
     const lastCenter = {
-      x: (positions[lastIndex] + positions[lastIndex + 3]) / 2,
-      y: (positions[lastIndex + 1] + positions[lastIndex + 4]) / 2,
-      z: (positions[lastIndex + 2] + positions[lastIndex + 5]) / 2,
+      x: (positions[lastLeft] + positions[lastRight]) / 2,
+      y: (positions[lastLeft + 1] + positions[lastRight + 1]) / 2,
+      z: (positions[lastLeft + 2] + positions[lastRight + 2]) / 2,
     };
     expect(lastCenter.x).toBeCloseTo(expectedLast.x);
     expect(lastCenter.z).toBeCloseTo(expectedLast.z);
