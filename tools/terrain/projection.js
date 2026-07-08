@@ -1,10 +1,9 @@
 // Shared WGS84 <-> British National Grid (EPSG:27700) projection helpers for the
-// tools/terrain/* pipeline scripts, all expressed as local metres relative to
-// LOCAL_ORIGIN (see config.js) so they line up with the baked heights/route/landcover
-// grids' coordinate space.
+// tools/terrain/* pipeline scripts, all expressed as local metres relative to a
+// location's own origin (see localOriginOf() in config.js) so they line up with that
+// location's baked heights/route/landcover grids' coordinate space.
 
 import proj4 from 'proj4';
-import { LOCAL_ORIGIN } from './config.js';
 
 // Standard OSGB36 National Grid definition (7-parameter Helmert approximation — accurate
 // to a few metres, not OSTN15 grid-accurate, which is fine for a game but not
@@ -15,9 +14,9 @@ proj4.defs(
     '+ellps=airy +towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs',
 );
 
-export function wgs84ToLocalBng(lat, lon) {
+export function wgs84ToLocalBng(lat, lon, origin) {
   const [easting, northing] = proj4('WGS84', 'EPSG:27700').forward([lon, lat]);
-  return { e: easting - LOCAL_ORIGIN.easting, n: northing - LOCAL_ORIGIN.northing };
+  return { e: easting - origin.easting, n: northing - origin.northing };
 }
 
 export function bngToWgs84(easting, northing) {

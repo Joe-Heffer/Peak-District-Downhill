@@ -1,32 +1,33 @@
 #!/usr/bin/env node
-// Classifies the terrain grid's landcover (grass / wood / rock / heather / track) by
-// fetching OpenStreetMap natural/landuse polygons for the same BNG_BBOX via the public
+// Classifies a location's terrain grid landcover (grass / wood / rock / heather / track)
+// by fetching OpenStreetMap natural/landuse polygons for its BNG_BBOX via the public
 // Overpass API, then baking a landcover[i][j] grid that lines up cell-for-cell with the
-// heights[i][j] grid in public/data/terrain/cutgate.json, consumed at runtime by
-// src/terrain/HeightmapTerrain.js to tint the terrain mesh.
+// heights[i][j] grid in that location's public/data/terrain/<slug>.json, consumed at
+// runtime by src/terrain/HeightmapTerrain.js to tint the terrain mesh.
 //
-// Must be run after buildTerrain.js and fetchRoute.js — it reads their outputs (grid
-// dimensions and the baked route polyline) rather than recomputing them, so the
-// landcover grid is guaranteed to stay pixel-aligned even if BNG_BBOX or the sizing
-// formula ever changes.
+// Must be run after buildTerrain.js and fetchRoute.js for the same location — it reads
+// their outputs (grid dimensions and the baked route polyline) rather than recomputing
+// them, so the landcover grid is guaranteed to stay pixel-aligned even if BNG_BBOX or the
+// sizing formula ever changes.
 //
 // v1 scope: only simple closed OSM ways are classified as landcover polygons —
 // multipolygon relations (e.g. some large woods mapped as outer/inner ring relations)
 // are not handled and are silently skipped. This is a deliberate, documented scope
-// limit (see tools/terrain/README.md), not a half-finished feature — consistent with
-// this pipeline already targeting a single known location rather than generalizing.
+// limit (see tools/terrain/README.md), not a half-finished feature.
+//
+// Classifies every configured location by default (see resolveLocationSlugs in
+// config.js) — pass --location=<slug> to classify just one.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import {
-  BNG_BBOX,
-  LOCAL_ORIGIN,
+  getLocation,
+  localOriginOf,
+  outputPathsFor,
+  resolveLocationSlugs,
   OVERPASS_ENDPOINT,
   OVERPASS_USER_AGENT,
-  TERRAIN_OUT,
-  ROUTE_OUT,
-  LANDCOVER_OUT,
   ATTRIBUTION,
 } from './config.js';
 import { wgs84ToLocalBng, wgs84BboxOf } from './projection.js';
@@ -80,7 +81,7 @@ async function fetchLandcoverWays(bbox) {
 
 // Builds { cls, points: [{e,n}], bbox: {minE,maxE,minN,maxN} } polygons from simple
 // closed ways only (first node id === last node id) — see the v1 scope note above.
-function buildPolygons(ways) {
+function buildPolygons(ways, origin) {
   const polygons = [];
   for (const way of ways) {
     if (way.nodes.length < 4 || way.nodes[0] !== way.nodes[way.nodes.length - 1]) {
@@ -90,7 +91,7 @@ function buildPolygons(ways) {
     const rule = LANDCOVER_TAG_RULES.find((r) => r.test(way.tags ?? {}));
     if (!rule) continue;
 
-    const points = way.geometry.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon));
+    const points = way.geometry.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon, origin));
     const bbox = points.reduce(
       (acc, p) => ({
         minE: Math.min(acc.minE, p.e),
@@ -182,14 +183,17 @@ function buildLandcoverGrid({ cols, rows, cellSize, routePoints, polygons }) {
   return { landcover, histogram };
 }
 
-async function main() {
-  const terrainData = JSON.parse(readFileSync(fileURLToPath(TERRAIN_OUT), 'utf8'));
-  const routeData = JSON.parse(readFileSync(fileURLToPath(ROUTE_OUT), 'utf8'));
+async function fetchLandcoverFor(location) {
+  const paths = outputPathsFor(location.slug);
+  const origin = localOriginOf(location);
+
+  const terrainData = JSON.parse(readFileSync(fileURLToPath(paths.terrain), 'utf8'));
+  const routeData = JSON.parse(readFileSync(fileURLToPath(paths.route), 'utf8'));
   const { cellSize, cols, rows } = terrainData;
 
-  const bbox = wgs84BboxOf(BNG_BBOX);
+  const bbox = wgs84BboxOf(location.bbox);
   const ways = await fetchLandcoverWays(bbox);
-  const polygons = buildPolygons(ways);
+  const polygons = buildPolygons(ways, origin);
 
   const { landcover, histogram } = buildLandcoverGrid({
     cols,
@@ -201,7 +205,7 @@ async function main() {
 
   const landcoverData = {
     crs: 'EPSG:27700',
-    origin: LOCAL_ORIGIN,
+    origin,
     cellSize,
     cols,
     rows,
@@ -209,15 +213,21 @@ async function main() {
     landcover,
     source:
       'OpenStreetMap landcover tags (natural=wood/bare_rock/scree/heath, landuse=forest) ' +
-      'within BNG_BBOX, plus proximity to the Cut Gate route for track.',
+      `within BNG_BBOX, plus proximity to the ${location.name} route for track.`,
     license: ATTRIBUTION.route,
   };
 
-  mkdirSync(dirname(fileURLToPath(LANDCOVER_OUT)), { recursive: true });
-  writeFileSync(LANDCOVER_OUT, JSON.stringify(landcoverData));
+  mkdirSync(dirname(fileURLToPath(paths.landcover)), { recursive: true });
+  writeFileSync(paths.landcover, JSON.stringify(landcoverData));
 
-  console.log(`Wrote ${fileURLToPath(LANDCOVER_OUT)} (${cols}x${rows} cells).`);
+  console.log(`Wrote ${fileURLToPath(paths.landcover)} (${cols}x${rows} cells).`);
   console.log('Landcover class histogram:', histogram);
+}
+
+async function main() {
+  for (const slug of resolveLocationSlugs()) {
+    await fetchLandcoverFor(getLocation(slug));
+  }
 }
 
 main().catch((error) => {

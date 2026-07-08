@@ -1,21 +1,25 @@
 #!/usr/bin/env node
-// Fetches the Cut Gate bridleway geometry from OpenStreetMap via the public Overpass
+// Fetches a location's bridleway geometry from OpenStreetMap via the public Overpass
 // API, stitches its way segments into one ordered polyline, reprojects it from WGS84
-// into local British National Grid metres (matching the terrain's LOCAL_ORIGIN), and
+// into local British National Grid metres (matching the location's own origin), and
 // writes the baked route consumed at runtime by src/routes/RouteOverlay.js.
 //
-// Requires OSM_WAY_IDS in tools/terrain/config.js to be filled in first (look up the
-// Cut Gate way id(s) by hand on https://www.openstreetmap.org).
+// Requires osmWayIds for the location in tools/terrain/config.js to be filled in first
+// (look up the route's way id(s) by hand on https://www.openstreetmap.org).
+//
+// Fetches every configured location by default (see resolveLocationSlugs in config.js) —
+// pass --location=<slug> to fetch just one.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import {
-  LOCAL_ORIGIN,
-  OSM_WAY_IDS,
+  getLocation,
+  localOriginOf,
+  outputPathsFor,
+  resolveLocationSlugs,
   OVERPASS_ENDPOINT,
   OVERPASS_USER_AGENT,
-  ROUTE_OUT,
   ATTRIBUTION,
 } from './config.js';
 import { wgs84ToLocalBng } from './projection.js';
@@ -57,7 +61,7 @@ function stitchWays(ways) {
     if (matchIndex === -1) {
       throw new Error(
         'Could not stitch all OSM way segments into a single chain — they may not share ' +
-          'endpoint nodes. Check OSM_WAY_IDS in tools/terrain/config.js.',
+          'endpoint nodes. Check osmWayIds in tools/terrain/config.js.',
       );
     }
 
@@ -79,33 +83,44 @@ function stitchWays(ways) {
   return chain;
 }
 
-async function main() {
-  if (OSM_WAY_IDS.length === 0) {
-    throw new Error('OSM_WAY_IDS is empty — fill in the Cut Gate way id(s) in tools/terrain/config.js first.');
+async function fetchRouteFor(location) {
+  const { osmWayIds } = location;
+  const routeOut = outputPathsFor(location.slug).route;
+
+  if (osmWayIds.length === 0) {
+    throw new Error(
+      `osmWayIds is empty for "${location.slug}" — fill in its way id(s) in tools/terrain/config.js first.`,
+    );
   }
 
-  const ways = await fetchWays(OSM_WAY_IDS);
+  const origin = localOriginOf(location);
+  const ways = await fetchWays(osmWayIds);
   const chain = stitchWays(ways);
-  let points = chain.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon));
+  let points = chain.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon, origin));
 
-  // Order so the first point is the north/high end (Margery Hill, top of the descent)
-  // and the last is the south/low end (Upper Derwent Visitor Centre) — matches the
-  // spawn-point convention main.js relies on.
+  // Order so the first point is the north/high end (top of the descent) and the last is
+  // the south/low end (bottom) — matches the spawn-point convention main.js relies on.
   if (points[0].n < points[points.length - 1].n) {
     points = points.reverse();
   }
 
   const routeData = {
     crs: 'EPSG:27700',
-    origin: LOCAL_ORIGIN,
-    source: `OpenStreetMap way(s) ${OSM_WAY_IDS.join(', ')}`,
+    origin,
+    source: `OpenStreetMap way(s) ${osmWayIds.join(', ')}`,
     license: ATTRIBUTION.route,
     points,
   };
 
-  mkdirSync(dirname(fileURLToPath(ROUTE_OUT)), { recursive: true });
-  writeFileSync(ROUTE_OUT, JSON.stringify(routeData));
-  console.log(`Wrote ${fileURLToPath(ROUTE_OUT)} (${points.length} points).`);
+  mkdirSync(dirname(fileURLToPath(routeOut)), { recursive: true });
+  writeFileSync(routeOut, JSON.stringify(routeData));
+  console.log(`Wrote ${fileURLToPath(routeOut)} (${points.length} points).`);
+}
+
+async function main() {
+  for (const slug of resolveLocationSlugs()) {
+    await fetchRouteFor(getLocation(slug));
+  }
 }
 
 main().catch((error) => {

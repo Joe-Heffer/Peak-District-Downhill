@@ -79,6 +79,14 @@ tiles and `proj4` to reproject OSM's WGS84 coordinates into British National Gri
 source data has been processed they hold a synthetic placeholder (`npm run
 terrain:placeholder`), clearly marked via a `placeholder: true` field.
 
+The pipeline itself is location-generic: `tools/terrain/config.js` exports a
+`LOCATIONS` registry (slug, display name, BNG bbox, OSM way ids) rather than a single
+hardcoded bbox, and every pipeline script takes a `--location=<slug>` CLI arg (defaulting
+to every registered location) with output filenames derived from `slug`. Only `cutgate`
+is registered today — see "Adding a new location" in `tools/terrain/README.md` for
+registering and baking a second descent once its data has been researched (issue #52)
+and downloaded.
+
 `public/data/terrain/cutgate-trees.json` (real tree positions/heights, consumed by
 `src/scenery/Scenery.js`) is a separate, optional pipeline step — `npm run
 terrain:trees` (`tools/terrain/buildTrees.js`) — derived from a canopy height model

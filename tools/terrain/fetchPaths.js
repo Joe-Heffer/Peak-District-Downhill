@@ -1,19 +1,30 @@
 #!/usr/bin/env node
-// Fetches the surrounding road/bridleway/footpath network from OpenStreetMap within
-// BNG_BBOX (same area as fetchLandcover.js), excluding the Cut Gate way(s) themselves
-// (already rendered separately by fetchRoute.js/RouteOverlay.js), classifies each way
-// into road/bridleway/footpath (see pathClassification.js), clips it to the bbox, and
-// writes public/data/routes/cutgate-paths.json for src/routes/PathsOverlay.js to render
-// as terrain-following ribbon meshes.
+// Fetches a location's surrounding road/bridleway/footpath network from OpenStreetMap
+// within its BNG_BBOX (same area as fetchLandcover.js), excluding the location's own
+// route way(s) (already rendered separately by fetchRoute.js/RouteOverlay.js),
+// classifies each way into road/bridleway/footpath (see pathClassification.js), clips it
+// to the bbox, and writes public/data/routes/<slug>-paths.json for
+// src/routes/PathsOverlay.js to render as terrain-following ribbon meshes.
 //
 // Unlike fetchLandcover.js, this has no ordering dependency on buildTerrain.js's output
 // — paths are a freeform vector overlay, not a per-cell grid, so there's no pixel-
 // alignment requirement. Kept last in the pipeline purely for README consistency.
+//
+// Fetches every configured location by default (see resolveLocationSlugs in config.js) —
+// pass --location=<slug> to fetch just one.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
-import { BNG_BBOX, LOCAL_ORIGIN, OSM_WAY_IDS, OVERPASS_ENDPOINT, OVERPASS_USER_AGENT, PATHS_OUT, ATTRIBUTION } from './config.js';
+import {
+  getLocation,
+  localOriginOf,
+  outputPathsFor,
+  resolveLocationSlugs,
+  OVERPASS_ENDPOINT,
+  OVERPASS_USER_AGENT,
+  ATTRIBUTION,
+} from './config.js';
 import { wgs84ToLocalBng, wgs84BboxOf } from './projection.js';
 import { categorizeHighway, excludeKnownRouteWays, clipPolylineToBbox, PATH_CATEGORIES } from './pathClassification.js';
 
@@ -52,10 +63,10 @@ async function fetchHighwayWays(bbox) {
 }
 
 // Builds { category, wayId, points: [{e,n}] } entries from the fetched ways, excluding
-// the Cut Gate way(s) itself, dropping unclassified/out-of-scope highway tags, and
+// the location's own route way(s), dropping unclassified/out-of-scope highway tags, and
 // clipping each way's geometry to the local bbox (splitting into multiple entries if a
 // way crosses the boundary more than once).
-export function buildPathEntries(ways, { excludedWayIds, bngBbox }) {
+export function buildPathEntries(ways, { excludedWayIds, bngBbox, origin }) {
   const localBbox = {
     minE: 0,
     maxE: bngBbox.maxE - bngBbox.minE,
@@ -68,7 +79,7 @@ export function buildPathEntries(ways, { excludedWayIds, bngBbox }) {
     const category = categorizeHighway(way.tags ?? {});
     if (!category) continue;
 
-    const points = way.geometry.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon));
+    const points = way.geometry.map(({ lat, lon }) => wgs84ToLocalBng(lat, lon, origin));
     for (const segment of clipPolylineToBbox(points, localBbox)) {
       entries.push({ category, wayId: way.id, points: segment });
     }
@@ -76,30 +87,39 @@ export function buildPathEntries(ways, { excludedWayIds, bngBbox }) {
   return entries;
 }
 
-async function main() {
-  const bbox = wgs84BboxOf(BNG_BBOX);
+async function fetchPathsFor(location) {
+  const origin = localOriginOf(location);
+  const pathsOut = outputPathsFor(location.slug).paths;
+
+  const bbox = wgs84BboxOf(location.bbox);
   const ways = await fetchHighwayWays(bbox);
-  const paths = buildPathEntries(ways, { excludedWayIds: OSM_WAY_IDS, bngBbox: BNG_BBOX });
+  const paths = buildPathEntries(ways, { excludedWayIds: location.osmWayIds, bngBbox: location.bbox, origin });
 
   const histogram = Object.fromEntries(PATH_CATEGORIES.map((c) => [c, 0]));
   for (const path of paths) histogram[path.category] += 1;
 
   const pathsData = {
     crs: 'EPSG:27700',
-    origin: LOCAL_ORIGIN,
+    origin,
     categories: PATH_CATEGORIES,
     source:
       `OpenStreetMap highway=${HIGHWAY_VALUES.join('/')} ways within BNG_BBOX, excluding ` +
-      `the Cut Gate route itself (way id(s) ${OSM_WAY_IDS.join(', ')}).`,
+      `the ${location.name} route itself (way id(s) ${location.osmWayIds.join(', ')}).`,
     license: ATTRIBUTION.route,
     paths,
   };
 
-  mkdirSync(dirname(fileURLToPath(PATHS_OUT)), { recursive: true });
-  writeFileSync(PATHS_OUT, JSON.stringify(pathsData));
+  mkdirSync(dirname(fileURLToPath(pathsOut)), { recursive: true });
+  writeFileSync(pathsOut, JSON.stringify(pathsData));
 
-  console.log(`Wrote ${fileURLToPath(PATHS_OUT)} (${paths.length} path segments).`);
+  console.log(`Wrote ${fileURLToPath(pathsOut)} (${paths.length} path segments).`);
   console.log('Path category histogram:', histogram);
+}
+
+async function main() {
+  for (const slug of resolveLocationSlugs()) {
+    await fetchPathsFor(getLocation(slug));
+  }
 }
 
 main().catch((error) => {
