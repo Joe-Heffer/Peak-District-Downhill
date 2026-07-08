@@ -86,6 +86,47 @@ reproducibility (matches `Scenery.test.js`'s expectation of deterministic scener
 distant grass — no need for the octahedral-impostor stippling techniques built for
 static architectural/open-world viewing.
 
+## Heather & bracken shrub design
+
+Two additional shrub layers (issue #210), sharing the grass approach above but tuned
+to read as distinct plant families — `src/scenery/Shrubs.js` factors out the parts
+identical between them, with `src/scenery/Heather.js`/`src/scenery/Bracken.js` as thin
+variant modules supplying their own constants/palette/texture.
+
+**Representation — fuller clumps, not a 2-plane cross.** Each instance is 3
+intersecting alpha-tested planes (evenly spaced across 180°, generalising grass's 2
+planes at 90°) rather than grass's 2, giving a bushier silhouette from more viewing
+angles — the main lever distinguishing "shrub" from "blade clump."
+
+**Texture — generated, no asset file.** Heather draws a mounded cluster of overlapping
+blob shapes (rounded flower heads); bracken draws wide, jagged fern-frond shapes with
+alternating leaflets — both alpha-tested canvas textures generated at runtime, same
+pattern as grass's blade-cluster texture.
+
+**Shading cheat.** Same base→tip vertex-colour gradient technique as grass, but purple
+(heather, anchored near the style guide's Heather Purple `#3D2F56`, brightened for
+visibility) and amber-orange (bracken, anchored near Bracken Orange `#C6702F`) instead
+of green.
+
+**Wind.** Same shared `uTime` uniform and shader-injection approach as grass, but
+stiffer: heather (woody shrub) swings slowest/least, bracken (fern frond) a bit more,
+both well below grass's amplitude — see the constants in `Heather.js`/`Bracken.js`.
+
+**Placement.** Heather is restricted to `heather` landcover only (sparser than grass);
+bracken to `grass` landcover, tuned ~6x sparser than grass so it reads as an occasional
+accent rather than doubling ground-cover density. Each gets its own seed in the shared
+numbering scheme (grass 1339, heather 1340, bracken 1341).
+
+**Known gap — heather currently renders zero instances on the real route.** The live
+Cut Gate landcover data (`public/data/terrain/cutgate-landcover.json`) has 0 cells
+classified `heather` — `tools/terrain/fetchLandcover.js` only classifies simple closed
+OSM ways, and this route's real `natural=heath` moorland is very likely mapped as a
+multipolygon relation, which the pipeline explicitly skips. The heather shrub layer is
+fully implemented and tested, just dormant until that separate OSM-ingestion gap is
+fixed — not a bug in this feature.
+
+**Distance cutoff.** Same flat 70m cutoff as grass.
+
 ## Tree design
 
 Keep the real LIDAR-derived positions/heights/radii in `cutgate-trees.json` exactly as
@@ -119,6 +160,7 @@ loop over instances.
 | --- | --- | --- |
 | 1 | Procedural grass sprite system (`src/scenery/Grass.js`, generated texture, shared wind shader, corridor placement by landcover class via `src/procgen/`) | Landed — #179 |
 | 2 | Tree canopy upgrade: replace cone geometry with trunk + cross-quad foliage canopy in `Scenery.js`, wired to the same wind uniform | #180 |
+| 3 | Heather + bracken shrub scatter layer (`src/scenery/Heather.js`, `src/scenery/Bracken.js`, shared `src/scenery/Shrubs.js` helper) | Landed — #210 |
 
 Phase 1 note: grass placement reuses `src/procgen/`'s `sampleAlongRoute` →
 `jitterLateral` → `filterByLandcover` → `groundPoints` → `toInstanceMatrices`

@@ -3,22 +3,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildScenery, LATERAL_MIN, LATERAL_MAX, TREE_UNIT_HEIGHT } from './Scenery.js';
 import { routePointToWorld } from '../routes/RouteOverlay.js';
 
-// Grass.js's buildGrass() generates a canvas texture, which needs a real DOM — not
-// available under this project's default `node` Vitest environment (see
-// vitest.config.js; same reason HeightmapTerrain.js's canvas-touching
-// buildTerrainMesh has no test coverage). Placement/geometry logic (buildGrassMatrices,
-// buildGrassClumpGeometry) is covered directly in Grass.test.js instead; here we only
-// need a stand-in InstancedMesh so buildScenery's own grouping/wind-wiring is testable.
-// vi.mock calls are hoisted above imports by vitest's transform, so this applies before
-// Scenery.js (which imports buildGrass from Grass.js) is evaluated above.
-vi.mock('./Grass.js', () => ({
-  buildGrass: (routeData, terrain, windUniform) => {
-    const mesh = new THREE.InstancedMesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial(), 3);
+// Grass.js/Heather.js/Bracken.js's build*() functions generate canvas textures, which
+// need a real DOM — not available under this project's default `node` Vitest
+// environment (see vitest.config.js; same reason HeightmapTerrain.js's canvas-touching
+// buildTerrainMesh has no test coverage). Placement/geometry logic is covered directly
+// in each module's own test file instead; here we only need stand-in InstancedMeshes
+// so buildScenery's own grouping/wind-wiring is testable. vi.mock calls are hoisted
+// above imports by vitest's transform, so these apply before Scenery.js (which imports
+// from all three) is evaluated above.
+function mockShrubBuilder(count) {
+  return (routeData, terrain, windUniform) => {
+    const mesh = new THREE.InstancedMesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial(), count);
     for (let i = 0; i < mesh.count; i += 1) mesh.setMatrixAt(i, new THREE.Matrix4());
     mesh.material.userData.windUniform = windUniform;
     return mesh;
-  },
-}));
+  };
+}
+vi.mock('./Grass.js', () => ({ buildGrass: mockShrubBuilder(3) }));
+vi.mock('./Heather.js', () => ({ buildHeather: mockShrubBuilder(2) }));
+vi.mock('./Bracken.js', () => ({ buildBracken: mockShrubBuilder(1) }));
 
 const terrain = {
   getHeightAt: (x, z) => 100 + x * 0.01 - z * 0.005,
@@ -71,31 +74,39 @@ function nearestDistanceToRoute(position) {
 }
 
 describe('buildScenery', () => {
-  it('returns a group with a tree, rock, and grass InstancedMesh', () => {
+  it('returns a group with tree, rock, grass, heather, and bracken InstancedMeshes', () => {
     const group = buildScenery(routeData, treesData, terrain);
 
     expect(group).toBeInstanceOf(THREE.Group);
-    expect(group.children).toHaveLength(3);
-    expect(group.children[0]).toBeInstanceOf(THREE.InstancedMesh);
-    expect(group.children[1]).toBeInstanceOf(THREE.InstancedMesh);
-    expect(group.children[2]).toBeInstanceOf(THREE.InstancedMesh);
+    expect(group.children).toHaveLength(5);
+    for (const child of group.children) {
+      expect(child).toBeInstanceOf(THREE.InstancedMesh);
+    }
     expect(group.children[0].count).toBe(treesData.trees.length);
     expect(group.children[1].count).toBeGreaterThan(0);
-    expect(group.children[2].count).toBeGreaterThan(0);
+    expect(group.children[2].count).toBeGreaterThan(0); // grass
+    expect(group.children[3].count).toBeGreaterThan(0); // heather
+    expect(group.children[4].count).toBeGreaterThan(0); // bracken
   });
 
-  it('exposes update(dt) which advances the grass shader\'s shared wind uniform', () => {
+  it('exposes update(dt) which advances one wind uniform shared by grass, heather, and bracken', () => {
     const group = buildScenery(routeData, treesData, terrain);
-    const grassMesh = group.children[2];
-    const windUniform = grassMesh.material.userData.windUniform;
+    const grassUniform = group.children[2].material.userData.windUniform;
+    const heatherUniform = group.children[3].material.userData.windUniform;
+    const brackenUniform = group.children[4].material.userData.windUniform;
+
+    expect(heatherUniform).toBe(grassUniform);
+    expect(brackenUniform).toBe(grassUniform);
 
     expect(typeof group.update).toBe('function');
-    expect(windUniform.value).toBe(0);
+    expect(grassUniform.value).toBe(0);
 
     group.update(1 / 60);
     group.update(1 / 60);
 
-    expect(windUniform.value).toBeCloseTo(2 / 60);
+    expect(grassUniform.value).toBeCloseTo(2 / 60);
+    expect(heatherUniform.value).toBeCloseTo(2 / 60);
+    expect(brackenUniform.value).toBeCloseTo(2 / 60);
   });
 
   it('places one tree instance per treesData entry, grounded and sized from its data', () => {
