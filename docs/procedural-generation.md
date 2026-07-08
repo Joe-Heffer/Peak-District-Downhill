@@ -104,8 +104,13 @@ ones.
 **Landed**: `Scenery.js`'s rock scatter is a call through this pipeline, and
 `Scenery.js`'s grass sprites (`src/scenery/Grass.js`, issue #179) are the second
 consumer, proving it's genuinely reusable rather than rock-specific — see
-`docs/vegetation-rendering.md`. Tree placement is explicitly *not* migrated, since
-tree positions are real LIDAR ground truth rather than generated data.
+`docs/vegetation-rendering.md`. The heather and bracken shrub layers
+(`src/scenery/Heather.js`/`src/scenery/Bracken.js`, issue #210) are a third and
+fourth consumer, sharing a `src/scenery/Shrubs.js` helper that generalises grass's
+clump-geometry/shader approach — exactly the "composing existing stages, not
+copy-pasting a bespoke script" payoff this doc predicted. Tree placement is
+explicitly *not* migrated, since tree positions are real LIDAR ground truth rather
+than generated data.
 
 **Payoff**: future scattered content — mud patches on wet corners, warning signs
 before jumps, puddles — is composing 2-3 existing stages instead of writing a new

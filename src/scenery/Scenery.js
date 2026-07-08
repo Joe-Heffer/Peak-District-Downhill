@@ -7,6 +7,8 @@ import { jitterLateral } from '../procgen/jitterLateral.js';
 import { groundPoints } from '../procgen/groundPoints.js';
 import { toInstanceMatrices } from '../procgen/toInstanceMatrices.js';
 import { buildGrass } from './Grass.js';
+import { buildHeather } from './Heather.js';
+import { buildBracken } from './Bracken.js';
 
 const SAMPLE_SPACING = 10; // metres between candidate rock placement slots along the route
 export const LATERAL_MIN = 5;
@@ -87,11 +89,12 @@ function buildTreeMatrices(treesData, terrain) {
 }
 
 // Purely decorative. Trees and rocks are static: transforms are set once via
-// setMatrixAt, not touched again per frame. Grass alone animates, driven by a single
-// shared uTime uniform (see Grass.js) updated once per frame via the returned
-// group.update(dt) — stashing a lifecycle hook directly on the Object3D, the same
-// pattern setupSky.js already uses for sky.onBeforeRender — so future scattered
-// content sharing this wind system (tree canopy sway, #180) needs no new plumbing.
+// setMatrixAt, not touched again per frame. Grass, heather, and bracken all animate,
+// driven by one shared uTime uniform (see Grass.js/Heather.js/Bracken.js) updated
+// once per frame via the returned group.update(dt) — stashing a lifecycle hook
+// directly on the Object3D, the same pattern setupSky.js already uses for
+// sky.onBeforeRender — so future scattered content sharing this wind system (tree
+// canopy sway, #180) needs no new plumbing.
 export function buildScenery(routeData, treesData, terrain) {
   const group = new THREE.Group();
   group.add(buildInstancedMesh(buildTreeGeometry(), TREE_COLOR, buildTreeMatrices(treesData, terrain)));
@@ -99,6 +102,8 @@ export function buildScenery(routeData, treesData, terrain) {
 
   const windUniform = { value: 0 };
   group.add(buildGrass(routeData, terrain, windUniform));
+  group.add(buildHeather(routeData, terrain, windUniform));
+  group.add(buildBracken(routeData, terrain, windUniform));
   group.update = (dt) => {
     windUniform.value += dt;
   };
