@@ -1,19 +1,25 @@
-// Generates a single-rectangle Shapefile (.shp/.shx/.dbf/.prj) covering BNG_BBOX from
-// config.js, zipped for upload as the "area of interest" on the Defra/EA LIDAR download
-// portal (https://environment.data.gov.uk/survey) — an alternative to drawing the box by
-// hand on their map. Output is written under tools/terrain/raw/ (gitignored) since it's a
-// throwaway input to an external site, not part of the baked game data.
+// Generates a single-rectangle Shapefile (.shp/.shx/.dbf/.prj) covering a location's
+// BNG_BBOX from config.js, zipped for upload as the "area of interest" on the Defra/EA
+// LIDAR download portal (https://environment.data.gov.uk/survey) — an alternative to
+// drawing the box by hand on their map. Output is written under tools/terrain/raw/
+// (gitignored) since it's a throwaway input to an external site, not part of the baked
+// game data.
 //
 // No shapefile-writing dependency needed: the format for one closed rectangular ring is
 // simple enough to build directly from the ESRI Shapefile spec
 // (https://www.esri.com/content/dam/esrisites/sitecore-archive/Files/Pdfs/library/whitepapers/pdfs/shapefile.pdf).
+//
+// Defaults to the first configured location — pass --location=<slug> to target another.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BNG_BBOX } from './config.js';
+import { getLocation, resolveLocationSlugs } from './config.js';
+
+const [slug] = resolveLocationSlugs();
+const { bbox: BNG_BBOX, slug: locationSlug } = getLocation(slug);
 
 const OUT_DIR = fileURLToPath(new URL('./raw/aoi/', import.meta.url));
-const BASENAME = 'cutgate-aoi';
+const BASENAME = `${locationSlug}-aoi`;
 
 // dBase III field type 'C' (character), single field "id" so the .dbf has a valid record.
 const DBF_FIELD_NAME = 'id';
