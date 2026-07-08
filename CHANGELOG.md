@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.4.0...peak-district-downhill-v0.5.0) (2026-07-08)
+
+
+### Features
+
+* add pre-run course-select overlay with Peak District overview map ([#191](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/191)) ([#193](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/193)) ([92ee9b4](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/92ee9b4c4bb5c86b514f47281578aa6623e032a0))
+* **camera:** pull chase camera back and up to show more scenery ([#207](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/207)) ([578d682](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/578d68208a2363b343cf6eaef8a46e48461e9612))
+* regenerate landcover and paths data from real OSM sources ([#202](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/202)) ([3506dea](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/3506dea64af189340fe3e0f056ea5fa327793bed))
+* **scenery:** procedural grass sprites + reusable scatter pipeline ([#209](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/209)) ([1e78bde](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/1e78bde40130259e05e58d070ed55e59de84b9a0))
+* **terrain:** bake real LIDAR tree data for Cut Gate ([#204](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/204)) ([4f76f8e](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/4f76f8e4355d8556ebb6465f448ccd4ad5ca7eed))
+
+
+### Bug Fixes
+
+* stop jump impulse using absolute world position as its lever arm ([#200](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/200)) ([bfdcb5b](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/bfdcb5bdeec3a544906d9439c8cefc835dbe6d48)), closes [#199](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/199)
+
 ## [0.4.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.3.0...peak-district-downhill-v0.4.0) (2026-07-05)
 
 
