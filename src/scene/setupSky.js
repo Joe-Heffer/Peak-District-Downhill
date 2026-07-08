@@ -10,6 +10,12 @@ const SUN_DISTANCE = 500;
 // Static-per-session presets (chosen once at load, no continuous day/night cycle) tuned
 // for "warm low sun, cooler midday" per issue #19, with hemisphere ground colour anchored
 // to the terrain's mossy placeholder tone (#4a5d3a) so ground and sky light agree.
+// mistColor/mistOpacity/mistHeight/mistRadius drive the height-based ground mist layer
+// (see GroundMist.js, issue #156) — a paler/cooler tone than fogColor since real
+// radiative-cooling valley mist reads that way against the sky glow above it. Heaviest
+// for dawn/night, minimal/none for overcastMidday per the issue's tuning ask;
+// mistOpacity <= 0 is the single gate GroundMist.js uses to skip building the layer, so
+// overcastMidday still carries real (non-zero) mistHeight/mistRadius for consistency.
 export const SKY_PRESETS = {
   dawn: {
     sunElevation: 4, sunAzimuth: 110,
@@ -18,6 +24,7 @@ export const SKY_PRESETS = {
     sunColor: 0xffb37a, sunIntensity: 1.4,
     hemiSkyColor: 0xb0c4de, hemiGroundColor: 0x4a5d3a, hemiIntensity: 0.6,
     fogColor: 0xdcc7b0, fogNear: 60, fogFar: 2600,
+    mistColor: 0xcfd3d6, mistOpacity: 0.55, mistHeight: 14, mistRadius: 220,
     toneMappingExposure: 0.9,
   },
   goldenHour: {
@@ -27,6 +34,7 @@ export const SKY_PRESETS = {
     sunColor: 0xffa552, sunIntensity: 1.6,
     hemiSkyColor: 0xffd9a0, hemiGroundColor: 0x4a5d3a, hemiIntensity: 0.7,
     fogColor: 0xf2b880, fogNear: 120, fogFar: 4200,
+    mistColor: 0xe8c9a0, mistOpacity: 0.25, mistHeight: 8, mistRadius: 180,
     toneMappingExposure: 1.0,
   },
   // THREE.Sky is a clear-atmosphere shader — high turbidity/mieDirectionalG and low
@@ -39,6 +47,8 @@ export const SKY_PRESETS = {
     sunColor: 0xcdd6dc, sunIntensity: 0.55,
     hemiSkyColor: 0xc9d2d8, hemiGroundColor: 0x4a5d3a, hemiIntensity: 1.1,
     fogColor: 0xb7bfc2, fogNear: 40, fogFar: 2000,
+    // No ground mist here — bright, already-hazy overcast light per issue #156's tuning.
+    mistColor: 0xc7cdd0, mistOpacity: 0, mistHeight: 6, mistRadius: 150,
     toneMappingExposure: 0.85,
   },
   dusk: {
@@ -48,6 +58,7 @@ export const SKY_PRESETS = {
     sunColor: 0xff7a5c, sunIntensity: 1.6,
     hemiSkyColor: 0x5b6d8c, hemiGroundColor: 0x435735, hemiIntensity: 1.0,
     fogColor: 0x9aa0c0, fogNear: 70, fogFar: 3000,
+    mistColor: 0x8f96b0, mistOpacity: 0.4, mistHeight: 12, mistRadius: 200,
     toneMappingExposure: 1.1,
   },
   // sunElevation is pushed well below the horizon purely so the Sky shader's atmosphere
@@ -65,6 +76,7 @@ export const SKY_PRESETS = {
     sunColor: 0x9fb8e8, sunIntensity: 0.6,
     hemiSkyColor: 0x263757, hemiGroundColor: 0x232a1a, hemiIntensity: 0.55,
     fogColor: 0x0a0e1c, fogNear: 25, fogFar: 700,
+    mistColor: 0x141a2e, mistOpacity: 0.6, mistHeight: 16, mistRadius: 240,
     toneMappingExposure: 1.3,
   },
 };
@@ -178,5 +190,5 @@ export function applySky({ scene, camera, renderer, dirLight, hemiLight }) {
     scene.add(createStars());
   }
 
-  return { isNight: Boolean(preset.isNight) };
+  return { isNight: Boolean(preset.isNight), preset };
 }
