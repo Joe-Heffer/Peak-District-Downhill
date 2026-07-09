@@ -20,6 +20,9 @@ html, body {
 
 #app canvas {
   display: block;
+  /* Issue #39: drag-to-look reads pointermove on this canvas, so touch drags must not
+     also trigger the browser's own scroll/pull-to-refresh gestures. */
+  touch-action: none;
 }
 
 #course-select {

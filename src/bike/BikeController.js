@@ -12,6 +12,11 @@ const HARD_LANDING_VELOCITY = -8;
 const CAMERA_OFFSET = new THREE.Vector3(0, 4.5, -9);
 const CAMERA_LOOKAT_OFFSET = new THREE.Vector3(0, 1.6, 0);
 const CAMERA_LERP = 0.1;
+// Free-look camera (issue #39): while InputController reports an active drag, the
+// camera's yaw tracks its raw lookYawOffset directly (see updateCamera below); once the
+// drag ends, this decays that offset back toward 0 (forward-facing) at ~63%/0.4s so the
+// trail stays in view again without a jarring snap.
+const LOOK_YAW_RETURN_RATE = 2.5; // 1/s exponential approach back to forward-facing
 
 // Physics (issue #66): a CANNON.RaycastVehicle chassis + wheels, replacing the old
 // velocity-hack CANNON.Sphere. A literal 2-wheel (front+rear, in-line) vehicle has no
@@ -417,6 +422,9 @@ export class BikeController {
     this.slopeSin = 0; // mirrors applyInput's local sinSlope
     this.boostActive = false;
     this.brakeActive = false;
+    this.looking = false; // mirrors inputState.looking, stashed in applyInput
+    this.lookYawInput = 0; // mirrors inputState.lookYawOffset, stashed in applyInput
+    this.cameraYawOffset = 0; // current blended camera yaw offset, see updateCamera
 
     // Day/night is fixed for the whole session (no live day/night cycle), so this is
     // decided once here rather than exposed as a toggle.
@@ -562,6 +570,7 @@ export class BikeController {
     this.slopeSin = 0;
     this.boostActive = false;
     this.brakeActive = false;
+    this.cameraYawOffset = 0;
     this.riderPoseFactor = 0;
     this.riderLandingAbsorb = 0;
   }
@@ -662,6 +671,8 @@ export class BikeController {
 
     this.boostActive = Boolean(inputState.boost);
     this.brakeActive = Boolean(inputState.brake);
+    this.looking = Boolean(inputState.looking);
+    this.lookYawInput = typeof inputState.lookYawOffset === 'number' ? inputState.lookYawOffset : 0;
 
     // Propulsion as a direct chassis-CoM force (not vehicle.applyEngineForce on the rear
     // wheel) — slope-induced acceleration comes for free from gravity + wheel ground
@@ -795,7 +806,7 @@ export class BikeController {
     this.mesh.quaternion.copy(this.body.quaternion);
     this.mesh.quaternion.multiply(MESH_YAW_OFFSET);
 
-    this.updateCamera();
+    this.updateCamera(dt);
   }
 
   // Rider pose (issue #126): blends a single -1..+1 pose factor (climb/seated ..
@@ -837,8 +848,20 @@ export class BikeController {
     this.riderPivot.position.set(0, -crouch, -setback);
   }
 
-  updateCamera() {
-    const offset = CAMERA_OFFSET.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+  // Free-look (issue #39): while the player is actively dragging (this.looking, stashed
+  // from inputState in applyInput), the camera's yaw tracks the raw drag offset directly;
+  // once they let go, it decays back to 0 so the view returns to forward-facing without
+  // needing a separate idle timer. Still orbits around CAMERA_OFFSET from the bike
+  // position/yaw, same as before — the look offset is just an extra yaw added on top.
+  updateCamera(dt) {
+    if (this.looking) {
+      this.cameraYawOffset = this.lookYawInput;
+    } else {
+      const blend = 1 - Math.exp(-LOOK_YAW_RETURN_RATE * dt);
+      this.cameraYawOffset -= this.cameraYawOffset * blend;
+    }
+
+    const offset = CAMERA_OFFSET.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw + this.cameraYawOffset);
     const targetPosition = this.mesh.position.clone().add(offset);
     this.camera.position.lerp(targetPosition, CAMERA_LERP);
     this.camera.lookAt(this.mesh.position.clone().add(CAMERA_LOOKAT_OFFSET));

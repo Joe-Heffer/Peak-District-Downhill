@@ -21,6 +21,10 @@ function dispatchPointer(elementId, type) {
   document.getElementById(elementId).dispatchEvent(new PointerEvent(type));
 }
 
+function dispatchCanvasPointer(canvas, type, options = {}) {
+  canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, button: 0, ...options }));
+}
+
 describe('createInputController keyboard bindings', () => {
   it('sets and clears steerLeft on ArrowLeft/KeyA keydown/keyup', () => {
     const state = createInputController();
@@ -152,5 +156,64 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.reset).toBe(true);
     dispatchPointer('reset-btn', 'pointerup');
     expect(state.reset).toBe(true);
+  });
+});
+
+describe('createInputController drag-to-look camera (issue #39)', () => {
+  it('does not bind look-drag handling when no canvas is passed', () => {
+    const state = createInputController();
+    expect(state.lookYawOffset).toBe(0);
+    expect(state.looking).toBe(false);
+  });
+
+  it('sets looking true on canvas pointerdown and accumulates lookYawOffset from drag deltas', () => {
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    const state = createInputController(canvas);
+
+    dispatchCanvasPointer(canvas, 'pointerdown', { clientX: 100 });
+    expect(state.looking).toBe(true);
+    expect(state.lookYawOffset).toBe(0);
+
+    // Dragging left (clientX decreases) should increase the offset (see
+    // LOOK_YAW_SENSITIVITY's sign in InputController.js).
+    dispatchCanvasPointer(canvas, 'pointermove', { clientX: 50 });
+    expect(state.lookYawOffset).toBeGreaterThan(0);
+
+    dispatchCanvasPointer(canvas, 'pointerup', {});
+    expect(state.looking).toBe(false);
+  });
+
+  it('clamps lookYawOffset to LOOK_YAW_MAX_OFFSET rather than allowing a full free spin', () => {
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    const state = createInputController(canvas);
+
+    dispatchCanvasPointer(canvas, 'pointerdown', { clientX: 0 });
+    dispatchCanvasPointer(canvas, 'pointermove', { clientX: -100000 });
+
+    expect(state.lookYawOffset).toBeCloseTo(Math.PI * 0.85);
+  });
+
+  it('ignores pointermove/pointerup from an unrelated pointerId', () => {
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    const state = createInputController(canvas);
+
+    dispatchCanvasPointer(canvas, 'pointerdown', { clientX: 0, pointerId: 1 });
+    dispatchCanvasPointer(canvas, 'pointermove', { clientX: 100, pointerId: 2 });
+    expect(state.lookYawOffset).toBe(0);
+
+    dispatchCanvasPointer(canvas, 'pointerup', { pointerId: 2 });
+    expect(state.looking).toBe(true);
+  });
+
+  it('ignores non-left-button pointerdown (e.g. right-click)', () => {
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    const state = createInputController(canvas);
+
+    dispatchCanvasPointer(canvas, 'pointerdown', { button: 2 });
+    expect(state.looking).toBe(false);
   });
 });
