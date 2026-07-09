@@ -150,8 +150,16 @@ export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotrop
   return new THREE.Mesh(geometry, material);
 }
 
-// Bilinear height lookup shared by bike grounding and route elevation sampling — no raw
-// physics raycasting needed anywhere.
+// Height lookup shared by bike grounding and route/scenery elevation sampling — no raw
+// physics raycasting needed anywhere. Interpolates each grid cell as the same two flat
+// triangles buildTerrainMesh renders (split along the (i+1,j)-(i,j+1) diagonal) and
+// cannon-es's Heightfield collides against (getConvexTrianglePillar uses that identical
+// diagonal), rather than a bilinear blend across the full cell. Bilinear agrees with the
+// triangulated surface only on the cell's edges/diagonal — at a cell's centre the two can
+// diverge by (h00+h11-h10-h01)/4, which on this terrain's 15m grid reaches ~3m on steep
+// ground. That mismatch is what made ground-hugging features (the ridden route ribbon,
+// bridleway network, bike grounding) visibly hover above or clip into the rendered/
+// physics surface between grid points.
 export function createHeightLookup(terrainData) {
   const { cols, rows, cellSize, heights } = terrainData;
 
@@ -163,17 +171,18 @@ export function createHeightLookup(terrainData) {
     const j0 = Math.floor(fj);
     const i1 = Math.min(i0 + 1, cols - 1);
     const j1 = Math.min(j0 + 1, rows - 1);
-    const ti = fi - i0;
-    const tj = fj - j0;
+    const u = fi - i0;
+    const v = fj - j0;
 
     const h00 = heights[i0][j0];
     const h10 = heights[i1][j0];
     const h01 = heights[i0][j1];
     const h11 = heights[i1][j1];
 
-    const hTop = h00 + (h10 - h00) * ti;
-    const hBottom = h01 + (h11 - h01) * ti;
-    return hTop + (hBottom - hTop) * tj;
+    if (u + v <= 1) {
+      return h00 + (h10 - h00) * u + (h01 - h00) * v;
+    }
+    return h10 * (1 - v) + h01 * (1 - u) + h11 * (u + v - 1);
   };
 }
 
