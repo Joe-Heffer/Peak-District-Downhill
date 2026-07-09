@@ -152,6 +152,9 @@ tools/terrain/raw/*
 !tools/terrain/raw/dsm/
 tools/terrain/raw/dsm/*
 !tools/terrain/raw/dsm/.gitkeep
+!tools/terrain/raw/aerial/
+tools/terrain/raw/aerial/*
+!tools/terrain/raw/aerial/.gitkeep
 
 # Playwright
 playwright-report/

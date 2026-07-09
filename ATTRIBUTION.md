@@ -16,6 +16,17 @@ Digital Terrain Model (DTM), via [environment.data.gov.uk](https://environment.d
 route is the Cut Gate bridleway way(s); landcover (woodland/rock/heather/track tinting)
 is classified from `natural`/`landuse` tags on nearby OSM ways.
 
+## Ground texture (issue #51)
+
+Contains public sector information licensed under the Open Government Licence v3.0.
+© Environment Agency copyright and/or database right. Derived from Aerial Photography
+for Great Britain (APGB) / Vertical Aerial Photography (VAP), via the same
+[environment.data.gov.uk](https://environment.data.gov.uk/survey) portal as Terrain
+above — see `tools/terrain/README.md` for the pipeline. Until real imagery has been
+baked (`npm run terrain:texture`), `public/data/terrain/cutgate-groundtexture.json` is a
+placeholder and the game falls back to `HeightmapTerrain.js`'s procedural canvas
+texture — there is no committed `ground.jpg` in that state.
+
 ---
 
 Until `npm run terrain:build` has been run with real source data (see
@@ -29,8 +40,6 @@ in their `source`/`license` fields and in the in-game credits overlay.
   [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/), via
   [Poly Pizza](https://poly.pizza/m/edNZoeH3lVP). Unlike the other assets below this is
   CC-BY, not CC0 — attribution is required, hence this entry.
-- **Ground texture** (`public/assets/textures/ground.jpg`): by Amal Kumar, via
-  [Poly Haven](https://polyhaven.com/textures), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 - **Sound effects & music** (`public/assets/audio/{wind,tire-roll,jump,crash,music}.mp3`):
   [Freesound.org](https://freesound.org), [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 

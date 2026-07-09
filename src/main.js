@@ -9,6 +9,7 @@ import { loadLandcoverData } from './terrain/loadLandcoverData.js';
 import { loadTreesData } from './terrain/loadTreesData.js';
 import { loadBuildingsData } from './terrain/loadBuildingsData.js';
 import { loadWaterData } from './terrain/loadWaterData.js';
+import { loadGroundTextureData } from './terrain/loadGroundTextureData.js';
 import { createTerrain } from './terrain/HeightmapTerrain.js';
 import { createRockTrackMaterial } from './terrain/RockTrackTexture.js';
 import { loadRouteData, buildRouteOverlay, routePointToWorld, computeSpawnYaw } from './routes/RouteOverlay.js';
@@ -49,7 +50,17 @@ function resumeAudioOnGesture() {
 
 const BIKE_MODEL_CREDIT = 'Bike: "Bike" by Poly by Google (CC-BY 3.0) via Poly Pizza';
 
-function renderCredits(courseName, terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData) {
+function renderCredits(
+  courseName,
+  terrainData,
+  routeData,
+  landcoverData,
+  pathsData,
+  treesData,
+  buildingsData,
+  waterData,
+  groundTextureData,
+) {
   const el = document.getElementById('credits');
   if (!el) return;
 
@@ -60,15 +71,16 @@ function renderCredits(courseName, terrainData, routeData, landcoverData, pathsD
     pathsData.placeholder ||
     treesData.placeholder ||
     buildingsData.placeholder ||
-    waterData.placeholder
+    waterData.placeholder ||
+    groundTextureData.placeholder
   ) {
     el.textContent =
-      `Placeholder terrain/route/landcover/paths/trees/buildings/water data (not real survey data) — run \`npm run terrain:build\` for the real ${courseName} dataset. ${BIKE_MODEL_CREDIT}`;
+      `Placeholder terrain/route/landcover/paths/trees/buildings/water/ground-texture data (not real survey data) — run \`npm run terrain:build\` for the real ${courseName} dataset. ${BIKE_MODEL_CREDIT}`;
     return;
   }
 
   el.textContent =
-    `Terrain: Environment Agency LIDAR (OGL) · Route, paths, buildings & landcover: OpenStreetMap contributors (ODbL) · Water: OpenStreetMap contributors (ODbL) · Trees: Environment Agency LIDAR (OGL) · ${BIKE_MODEL_CREDIT}`;
+    `Terrain: Environment Agency LIDAR (OGL) · Route, paths, buildings & landcover: OpenStreetMap contributors (ODbL) · Water: OpenStreetMap contributors (ODbL) · Trees: Environment Agency LIDAR (OGL) · Ground texture: Environment Agency aerial photography (OGL) · ${BIKE_MODEL_CREDIT}`;
 }
 
 // Placeholder terrain has no real grid origin to convert from, and placeholder route
@@ -163,16 +175,28 @@ async function init() {
   const courseDataUrl = (dir, suffix = '') =>
     `${import.meta.env.BASE_URL}data/${dir}/${course.id}${suffix}.json`;
 
-  const [terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData] = await Promise.all([
-    loadTerrainData(courseDataUrl('terrain')),
-    loadRouteData(courseDataUrl('routes')),
-    loadLandcoverData(courseDataUrl('terrain', '-landcover')),
-    loadPathsData(courseDataUrl('routes', '-paths')),
-    loadTreesData(courseDataUrl('terrain', '-trees')),
-    loadBuildingsData(courseDataUrl('terrain', '-buildings')),
-    loadWaterData(courseDataUrl('terrain', '-water')),
-  ]);
-  renderCredits(course.name, terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData);
+  const [terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData, groundTextureData] =
+    await Promise.all([
+      loadTerrainData(courseDataUrl('terrain')),
+      loadRouteData(courseDataUrl('routes')),
+      loadLandcoverData(courseDataUrl('terrain', '-landcover')),
+      loadPathsData(courseDataUrl('routes', '-paths')),
+      loadTreesData(courseDataUrl('terrain', '-trees')),
+      loadBuildingsData(courseDataUrl('terrain', '-buildings')),
+      loadWaterData(courseDataUrl('terrain', '-water')),
+      loadGroundTextureData(courseDataUrl('terrain', '-groundtexture')),
+    ]);
+  renderCredits(
+    course.name,
+    terrainData,
+    routeData,
+    landcoverData,
+    pathsData,
+    treesData,
+    buildingsData,
+    waterData,
+    groundTextureData,
+  );
 
   // yaw faces from the route's first point toward its second, so the bike spawns
   // already oriented down the track instead of at a fixed heading (see computeSpawnYaw).

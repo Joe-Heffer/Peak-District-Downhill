@@ -5,9 +5,10 @@ geodata into the small baked JSON files the game loads at runtime
 (`public/data/terrain/cutgate.json`, `public/data/routes/cutgate.json`,
 `public/data/terrain/cutgate-landcover.json`, `public/data/routes/cutgate-paths.json`,
 `public/data/terrain/cutgate-trees.json`, `public/data/terrain/cutgate-buildings.json`,
-`public/data/terrain/cutgate-water.json`). Covers a single location for now: Cut Gate,
-the Peak District bridleway descent from Margery Hill down to the Upper Derwent Visitor
-Centre.
+`public/data/terrain/cutgate-water.json`, `public/data/terrain/cutgate-groundtexture.json`)
+plus one baked image asset (`public/assets/textures/ground.jpg`). Covers a single location
+for now: Cut Gate, the Peak District bridleway descent from Margery Hill down to the Upper
+Derwent Visitor Centre.
 
 ## 1. Terrain — Environment Agency LIDAR
 
@@ -193,6 +194,44 @@ pipeline should keep working even where DSM tiles for this bbox aren't available
 
 Same license as Terrain above (it's the same EA/OGL source).
 
+## 8. Ground texture — Environment Agency aerial photography (optional)
+
+Bakes a real, licensed aerial-photography ground texture for
+`src/terrain/HeightmapTerrain.js` — see issue #51. `HeightmapTerrain.js` tiles a single
+small square texture every 10m across the whole terrain mesh, so this doesn't drape a
+full orthophoto over the route; it crops one small, visually homogeneous sample area
+(`TEXTURE_SAMPLE_AREA` in `config.js`, picked by hand away from paths/buildings/water,
+which already have their own overlays) and makes that seamlessly tileable.
+
+1. On the same <https://environment.data.gov.uk/survey> portal as step 1 (no new account
+   needed), select the **Aerial Photography for Great Britain (APGB)** or **Vertical
+   Aerial Photography (VAP)** product for the area covering `BNG_BBOX` (reuse the same
+   `generateAoiShapefile.js` shapefile upload as step 1).
+2. Download the GeoTIFF tile(s) and put them in `tools/terrain/raw/aerial/` (gitignored,
+   separate from the DTM/DSM tiles for the same reason `raw/dsm/` is separate from
+   `raw/`).
+3. Inspect the downloaded imagery and, if the default `TEXTURE_SAMPLE_AREA` centre point
+   in `config.js` (the bbox centroid) lands somewhere unsuitable — a building, a path, an
+   awkward field boundary — pick a better easting/northing by hand and update it there,
+   same as `OSM_WAY_IDS` above.
+4. Run:
+   ```bash
+   npm run terrain:texture
+   ```
+   This crops the sample area, blends its edges so it tiles without an obvious seam, and
+   writes `public/assets/textures/ground.jpg` and
+   `public/data/terrain/cutgate-groundtexture.json`.
+
+**v1 scope limit:** `TEXTURE_SAMPLE_AREA` must fall entirely within a single downloaded
+tile — no mosaicking across tile boundaries, same kind of documented limitation as
+Landcover/Buildings/Water's multipolygon-relation skip.
+
+Kept as its own optional step (not part of `npm run terrain:build`), same reasoning as
+Trees above — until it's run, `HeightmapTerrain.js`'s existing procedural canvas texture
+is used instead (see "Placeholder data" below).
+
+Same license as Terrain/Trees above (it's the same EA/OGL source).
+
 ## Placeholder data
 
 `public/data/**/*.json` are generated artifacts checked into git (like a lockfile) so
@@ -210,6 +249,6 @@ npm run terrain:placeholder
 
 The Environment Agency LIDAR portal is a browser download UI, not a stable
 unauthenticated REST endpoint suitable for scripting — selecting the area and downloading
-the tile(s) (steps 1-2 above, and step 5's DSM download) is a manual, one-time step, even
-though `generateAoiShapefile.js` can produce the area-of-interest upload for you.
-Everything else is scriptable and rerunnable.
+the tile(s) (steps 1-2 above, step 7's DSM download, and step 8's aerial photography
+download) is a manual, one-time step, even though `generateAoiShapefile.js` can produce
+the area-of-interest upload for you. Everything else is scriptable and rerunnable.

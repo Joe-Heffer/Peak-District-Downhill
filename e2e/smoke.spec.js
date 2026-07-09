@@ -37,20 +37,24 @@ test('game loads without errors, renders a canvas, and shows the correct credits
   await expect(page.locator('#minimap')).toBeVisible();
   await expect(page.locator('#stamina-bar-fill')).toHaveCSS('width', '140px'); // full stamina at spawn
 
-  // The credits text depends on whether any of the seven baked datasets are still the
+  // The credits text depends on whether any of the eight baked datasets are still the
   // synthetic placeholder — fetch them directly and derive the expected branch instead of
   // hardcoding one, so this stays correct whichever data is currently committed.
-  const [terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData] = await Promise.all([
-    request.get(new URL('data/terrain/cutgate.json', baseURL).href).then((r) => r.json()),
-    request.get(new URL('data/routes/cutgate.json', baseURL).href).then((r) => r.json()),
-    request
-      .get(new URL('data/terrain/cutgate-landcover.json', baseURL).href)
-      .then((r) => r.json()),
-    request.get(new URL('data/routes/cutgate-paths.json', baseURL).href).then((r) => r.json()),
-    request.get(new URL('data/terrain/cutgate-trees.json', baseURL).href).then((r) => r.json()),
-    request.get(new URL('data/terrain/cutgate-buildings.json', baseURL).href).then((r) => r.json()),
-    request.get(new URL('data/terrain/cutgate-water.json', baseURL).href).then((r) => r.json()),
-  ]);
+  const [terrainData, routeData, landcoverData, pathsData, treesData, buildingsData, waterData, groundTextureData] =
+    await Promise.all([
+      request.get(new URL('data/terrain/cutgate.json', baseURL).href).then((r) => r.json()),
+      request.get(new URL('data/routes/cutgate.json', baseURL).href).then((r) => r.json()),
+      request
+        .get(new URL('data/terrain/cutgate-landcover.json', baseURL).href)
+        .then((r) => r.json()),
+      request.get(new URL('data/routes/cutgate-paths.json', baseURL).href).then((r) => r.json()),
+      request.get(new URL('data/terrain/cutgate-trees.json', baseURL).href).then((r) => r.json()),
+      request.get(new URL('data/terrain/cutgate-buildings.json', baseURL).href).then((r) => r.json()),
+      request.get(new URL('data/terrain/cutgate-water.json', baseURL).href).then((r) => r.json()),
+      request
+        .get(new URL('data/terrain/cutgate-groundtexture.json', baseURL).href)
+        .then((r) => r.json()),
+    ]);
   const isPlaceholder = Boolean(
     terrainData.placeholder ||
       routeData.placeholder ||
@@ -58,12 +62,15 @@ test('game loads without errors, renders a canvas, and shows the correct credits
       pathsData.placeholder ||
       treesData.placeholder ||
       buildingsData.placeholder ||
-      waterData.placeholder,
+      waterData.placeholder ||
+      groundTextureData.placeholder,
   );
 
   const credits = page.locator('#credits');
   if (isPlaceholder) {
-    await expect(credits).toContainText('Placeholder terrain/route/landcover/paths/trees/buildings/water data');
+    await expect(credits).toContainText(
+      'Placeholder terrain/route/landcover/paths/trees/buildings/water/ground-texture data',
+    );
   } else {
     await expect(credits).toContainText('Environment Agency LIDAR');
   }
