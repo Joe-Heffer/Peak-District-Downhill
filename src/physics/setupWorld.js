@@ -9,8 +9,9 @@ import * as CANNON from 'cannon-es';
 // outer length silently finds nothing — confirmed empirically against both a minimal
 // repro and the real dataset. Padding the shorter dimension so the grid is square before
 // building the physics shape works around it; the extra rows are outside the real
-// terrain's mapped route/collision area and never rendered (buildTerrainMesh in
-// HeightmapTerrain.js uses the original, unpadded terrainData.heights).
+// terrain's mapped route/collision area and never rendered (the visual mesh built by
+// HeightmapTerrain.js's buildTerrainLOD uses the original, unpadded terrainData.heights —
+// only this physics shape gets padded).
 function padHeightsToSquare(heights) {
   if (heights.length >= heights[0].length) return heights;
   const padded = heights.slice();
@@ -50,10 +51,12 @@ function patchHeightfieldAabbBug(heightfieldShape) {
 // same rotation the old flat CANNON.Plane ground used) maps local (x, y, z) to world
 // (x, z, -y). So local x (i * elementSize) -> world x, local y (j * elementSize) ->
 // world z = -(j * elementSize), and local z (elevation) -> world y — exactly the
-// (i * cellSize, heights[i][j], -j * cellSize) layout buildTerrainMesh uses in
-// src/terrain/HeightmapTerrain.js. Passing `terrainData.heights` straight into the
-// heightfield with no transform keeps the physics body and the visual mesh
-// pixel-aligned.
+// (i * cellSize, heights[i][j], -j * cellSize) layout src/terrain/HeightmapTerrain.js
+// builds (per-chunk-local, then offset back to that same world position by each chunk's
+// THREE.LOD position — see buildTerrainLOD). Passing `terrainData.heights` straight into
+// this single full-resolution heightfield with no transform keeps the physics body and
+// the visual mesh's finest LOD level pixel-aligned; only the visual mesh decimates at
+// distance, never the collider.
 export function setupWorld(terrainData) {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
   world.broadphase = new CANNON.SAPBroadphase(world);

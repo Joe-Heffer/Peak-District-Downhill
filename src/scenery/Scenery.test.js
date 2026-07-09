@@ -13,8 +13,9 @@ import { routePointToWorld } from '../routes/RouteOverlay.js';
 // Grass.js/Heather.js/Bracken.js's build*() functions generate canvas textures, which
 // need a real DOM — not available under this project's default `node` Vitest
 // environment (see vitest.config.js; same reason HeightmapTerrain.js's canvas-touching
-// buildTerrainMesh has no test coverage). Placement/geometry logic is covered directly
-// in each module's own test file instead; here we only need stand-in InstancedMeshes
+// createTerrain/createPlaceholderGroundTexture has no test coverage). Placement/geometry
+// logic is covered directly in each module's own test file instead; here we only need
+// stand-in InstancedMeshes
 // so buildScenery's own grouping/wind-wiring is testable. vi.mock calls are hoisted
 // above imports by vitest's transform, so these apply before Scenery.js (which imports
 // from all three) is evaluated above.

@@ -33,10 +33,11 @@ bike was up on a ridge or down in a dip.
 - **No heavy post-processing.** Established by #19 and reaffirmed by #156: no
   `EffectComposer`/render-pass budget. `package.json` has no postprocessing dependency;
   `src/main.js`'s render loop is a single direct `renderer.render(scene, camera)` call.
-- **Single terrain mesh, no chunking/LOD.** `src/terrain/HeightmapTerrain.js` builds one
-  `BufferGeometry` for the whole course (`buildTerrainMesh`'s own comment explains why
-  LOD doesn't suit a camera that can be anywhere across a multi-kilometre grid) — any
-  atmosphere effect that touches terrain rendering has to work with that.
+- **Chunked terrain mesh (issue #71).** `src/terrain/HeightmapTerrain.js`'s
+  `buildTerrainLOD` tiles the course into a grid of `THREE.LOD` chunks (each with 1-3
+  decimated geometries swapped by distance to camera) rather than one `BufferGeometry` —
+  any atmosphere effect that touches terrain rendering has to work with many meshes
+  sharing one material, not a single mesh/geometry.
 - **Static per-session presets, not a live cycle.** `SKY_PRESETS` is chosen once per
   page load, not simulated continuously — matches `docs/procedural-generation.md`'s
   "one fixed real location baked at build time" premise. A live day/night cycle is

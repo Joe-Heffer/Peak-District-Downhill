@@ -177,7 +177,7 @@ function buildGrassMaterial(texture, windUniform) {
 }
 
 // Assembles the final InstancedMesh — the only DOM/canvas-touching piece of this
-// module, so (like HeightmapTerrain.js's buildTerrainMesh) it isn't unit tested;
+// module, so (like HeightmapTerrain.js's buildTerrainLOD) it isn't unit tested;
 // buildGrassMatrices/buildGrassClumpGeometry above cover the pure logic. `windUniform`
 // is a shared { value } object owned by Scenery.js so a future tree-canopy sway (#180)
 // can reuse the same wind system without new plumbing.
