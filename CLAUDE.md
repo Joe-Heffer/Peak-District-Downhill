@@ -31,11 +31,12 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 
 - `index.html` — page shell, loads `src/main.js` as a module script.
 - `src/main.js` — async `init()`: shows the course-select overlay (`src/courses/`) and
-  awaits the player's choice, then loads that course's baked terrain/route/landcover/trees
-  JSON, then wires up the scene, physics world, bike, and input, then runs the
-  render/physics tick loop. Also spawns the bike at `routeData.points[0]` and renders the
-  in-game credits/notice text (into `#credits`): a placeholder-data warning when any of
-  those datasets has `placeholder: true`, otherwise the real OGL/ODbL attribution line.
+  awaits the player's choice, then loads that course's baked
+  terrain/route/landcover/trees/buildings/water JSON, then wires up the scene, physics
+  world, bike, and input, then runs the render/physics tick loop. Also spawns the bike at
+  `routeData.points[0]` and renders the in-game credits/notice text (into `#credits`): a
+  placeholder-data warning when any of those datasets has `placeholder: true`, otherwise
+  the real OGL/ODbL attribution line.
 - `src/courses/` — `courses.js` is the course registry (currently one entry, Cut Gate,
   manually maintained until #47 generalizes `tools/terrain/` into a multi-location
   pipeline that could generate it instead); `CourseSelect.js` is the pre-run overlay that
@@ -72,6 +73,16 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
   `buildScenery()` returns a `THREE.Group` with an `update(dt)` attached, which advances
   the shared `uTime` uniform grass's wind-sway shader reads — `main.js`'s `tick()` calls
   it once per frame alongside `miniMap.update()`/`scoreTracker.update()`.
+- `src/scenery/Buildings.js` / `src/scenery/Water.js` (issue #49) — purely decorative,
+  real-world building footprints and water bodies near the route, sourced from
+  OpenStreetMap the same way `tools/terrain/fetchLandcover.js` sources landcover.
+  `buildBuildings()` extrudes each footprint (`public/data/terrain/cutgate-buildings.json`)
+  into a flat-roofed box via `THREE.ExtrudeGeometry`, grounded at the lowest terrain
+  height under its footprint. `buildWater()` renders lake/reservoir polygons
+  (`public/data/terrain/cutgate-water.json`) as a flat tinted plane at the average
+  terrain height under their footprint, and river/stream lines as a terrain-following
+  ribbon (same `src/routes/ribbonGeometry.js` technique as `PathsOverlay.js`). Neither
+  has a physics body, same as `Scenery.js`'s trees/rocks.
 - `src/effects/TyreTrackTrail.js` — persistent tyre tracks (issue #168): a visible
   imprint of where the bike has actually ridden, distinct from `RouteOverlay.js`'s
   static, intended-route ribbon. `buildTyreTrackTrail()` returns a `THREE.Mesh` with an
@@ -91,13 +102,21 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 The game currently models one real location: Cut Gate, a Peak District bridleway
 descent. `tools/terrain/` is a dev-only, rerunnable Node pipeline (`npm run
 terrain:build`) that turns Environment Agency LIDAR elevation data and OpenStreetMap
-route/landcover data into baked JSON files under `public/data/` that the app fetches at
-runtime — see `tools/terrain/README.md` for the manual LIDAR download step and how to
-rerun it. The pipeline relies on the `geotiff` devDependency to parse LIDAR GeoTIFF
-tiles and `proj4` to reproject OSM's WGS84 coordinates into British National Grid.
-`public/data/**/*.json` are committed generated artifacts, like a lockfile; until real
-source data has been processed they hold a synthetic placeholder (`npm run
-terrain:placeholder`), clearly marked via a `placeholder: true` field.
+route/landcover/paths/buildings/water data into baked JSON files under `public/data/`
+that the app fetches at runtime — see `tools/terrain/README.md` for the manual LIDAR
+download step and how to rerun it. The pipeline relies on the `geotiff` devDependency to
+parse LIDAR GeoTIFF tiles and `proj4` to reproject OSM's WGS84 coordinates into British
+National Grid. `public/data/**/*.json` are committed generated artifacts, like a
+lockfile; until real source data has been processed they hold a synthetic placeholder
+(`npm run terrain:placeholder`), clearly marked via a `placeholder: true` field.
+
+`public/data/terrain/cutgate-buildings.json` and `cutgate-water.json` (issue #49) are
+baked by `fetchBuildings.js`/`fetchWater.js` from OSM `building=*` ways and
+`natural=water`/`landuse=reservoir`/`waterway=river`/`stream` respectively — same
+Overpass-query pattern and v1 scope limit as Landcover/Paths (simple closed ways only,
+no multipolygon relations). Pure classification helpers
+(`buildingClassification.js`/`waterClassification.js`) are kept separate and tested in
+isolation, same pattern as `pathClassification.js`.
 
 `public/data/terrain/cutgate-trees.json` (real tree positions/heights, consumed by
 `src/scenery/Scenery.js`) is a separate, optional pipeline step — `npm run

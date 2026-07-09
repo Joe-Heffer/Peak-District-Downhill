@@ -45,6 +45,8 @@ export const ROUTE_OUT = new URL('../../public/data/routes/cutgate.json', import
 export const LANDCOVER_OUT = new URL('../../public/data/terrain/cutgate-landcover.json', import.meta.url);
 export const PATHS_OUT = new URL('../../public/data/routes/cutgate-paths.json', import.meta.url);
 export const TREES_OUT = new URL('../../public/data/terrain/cutgate-trees.json', import.meta.url);
+export const BUILDINGS_OUT = new URL('../../public/data/terrain/cutgate-buildings.json', import.meta.url);
+export const WATER_OUT = new URL('../../public/data/terrain/cutgate-water.json', import.meta.url);
 
 export const ATTRIBUTION = {
   terrain:

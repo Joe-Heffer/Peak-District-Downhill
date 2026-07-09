@@ -16,9 +16,12 @@ import {
   LANDCOVER_OUT,
   PATHS_OUT,
   TREES_OUT,
+  BUILDINGS_OUT,
+  WATER_OUT,
 } from './config.js';
 import { PATH_CATEGORIES, clipPolylineToBbox } from './pathClassification.js';
 import { estimateCanopyRadius } from './treeDetection.js';
+import { DEFAULT_BUILDING_HEIGHT } from './buildingClassification.js';
 
 const LANDCOVER_CLASSES = ['grass', 'wood', 'rock', 'heather', 'track'];
 
@@ -319,18 +322,97 @@ const treesData = {
   trees,
 };
 
+// A rectangular footprint (closed ring, matching OSM's closed-way convention) centred
+// on (centerE, centerN), rotated by `angle` radians — standing in for a farm building/
+// bothy near the route (issue #49) until real OSM building footprints are baked.
+function rectangleFootprint(centerE, centerN, width, depth, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const corners = [
+    [-width / 2, -depth / 2],
+    [width / 2, -depth / 2],
+    [width / 2, depth / 2],
+    [-width / 2, depth / 2],
+  ];
+  const points = corners.map(([dx, dy]) => ({
+    e: centerE + dx * cos - dy * sin,
+    n: centerN + dx * sin + dy * cos,
+  }));
+  points.push(points[0]);
+  return points;
+}
+
+// Two small synthetic outbuildings near opposite ends of the placeholder route — same
+// deterministic, fixed-bbox-fraction idiom as rockPatch/woodPatches above, standing in
+// for the real farm/dam buildings near Cut Gate until real OSM data is baked.
+const buildingsData = {
+  placeholder: true,
+  crs: 'EPSG:27700',
+  origin: LOCAL_ORIGIN,
+  source: PLACEHOLDER_NOTICE,
+  license: PLACEHOLDER_NOTICE,
+  buildings: [
+    {
+      points: rectangleFootprint(bboxWidth * 0.56, bboxHeight * 0.06, 10, 6, 0.3),
+      height: DEFAULT_BUILDING_HEIGHT,
+    },
+    {
+      points: rectangleFootprint(bboxWidth * 0.46, bboxHeight * 0.95, 6, 5, -0.6),
+      height: DEFAULT_BUILDING_HEIGHT - 0.5,
+    },
+  ],
+};
+
+// A wavy closed ring approximating a reservoir's outline (deterministic sin/cos
+// perturbation, same idiom as elsewhere in this script — no Math.random()), standing in
+// for Howden/Derwent Reservoirs until real OSM water polygons are baked.
+function reservoirFootprint(centerE, centerN, radiusE, radiusN, segments = 16) {
+  const points = [];
+  for (let s = 0; s < segments; s += 1) {
+    const t = (s / segments) * Math.PI * 2;
+    points.push({
+      e: centerE + Math.cos(t) * radiusE * (1 + 0.1 * Math.sin(t * 3)),
+      n: centerN + Math.sin(t) * radiusN * (1 + 0.1 * Math.cos(t * 2)),
+    });
+  }
+  points.push(points[0]);
+  return points;
+}
+
+const waterData = {
+  placeholder: true,
+  crs: 'EPSG:27700',
+  origin: LOCAL_ORIGIN,
+  source: PLACEHOLDER_NOTICE,
+  license: PLACEHOLDER_NOTICE,
+  polygons: [
+    {
+      cls: 'reservoir',
+      points: reservoirFootprint(bboxWidth * 0.68, bboxHeight * 0.3, minSpan * 0.09, minSpan * 0.06),
+    },
+  ],
+  lines: [
+    { cls: 'stream', points: branchFrom(Math.round(routePoints.length * 0.35), 1, pathBranchLength * 0.8, BRANCH_STEPS, 99) },
+  ],
+};
+
 mkdirSync(dirname(fileURLToPath(TERRAIN_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(ROUTE_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(PATHS_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(TREES_OUT)), { recursive: true });
+mkdirSync(dirname(fileURLToPath(BUILDINGS_OUT)), { recursive: true });
+mkdirSync(dirname(fileURLToPath(WATER_OUT)), { recursive: true });
 writeFileSync(TERRAIN_OUT, JSON.stringify(terrainData));
 writeFileSync(ROUTE_OUT, JSON.stringify(routeData));
 writeFileSync(LANDCOVER_OUT, JSON.stringify(landcoverData));
 writeFileSync(PATHS_OUT, JSON.stringify(pathsData));
 writeFileSync(TREES_OUT, JSON.stringify(treesData));
+writeFileSync(BUILDINGS_OUT, JSON.stringify(buildingsData));
+writeFileSync(WATER_OUT, JSON.stringify(waterData));
 
 console.log(`Wrote placeholder terrain (${cols}x${rows} @ ${cellSize}m) and route (${routePoints.length} points).`);
 console.log('Landcover class histogram:', landcoverHistogram);
 console.log(`Wrote placeholder paths (${pathsData.paths.length} segments).`);
 console.log(`Wrote placeholder trees (${trees.length} trees).`);
+console.log(`Wrote placeholder buildings (${buildingsData.buildings.length}) and water (${waterData.polygons.length} polygon, ${waterData.lines.length} line).`);
 console.log('Reminder: this is synthetic placeholder data, not real Cut Gate topology.');
