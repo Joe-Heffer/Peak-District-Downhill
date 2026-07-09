@@ -4,7 +4,8 @@ Dev-only Node scripts (not part of the shipped browser bundle) that turn real UK
 geodata into the small baked JSON files the game loads at runtime
 (`public/data/terrain/cutgate.json`, `public/data/routes/cutgate.json`,
 `public/data/terrain/cutgate-landcover.json`, `public/data/routes/cutgate-paths.json`,
-`public/data/terrain/cutgate-trees.json`). Covers a single location for now: Cut Gate,
+`public/data/terrain/cutgate-trees.json`, `public/data/terrain/cutgate-buildings.json`,
+`public/data/terrain/cutgate-water.json`). Covers a single location for now: Cut Gate,
 the Peak District bridleway descent from Margery Hill down to the Upper Derwent Visitor
 Centre.
 
@@ -98,13 +99,57 @@ are excluded entirely (out of scope per issue #76's three named categories).
 
 Same license as Route/Landcover above (it's the same OSM/ODbL source).
 
-## Or: run all four together
+## 5. Buildings — OpenStreetMap
+
+Bakes real building footprints near the route (dam buildings, barns, farm buildings —
+see issue #49) for `src/scenery/Buildings.js` to extrude into simple flat-roofed boxes.
+Fetches `building=*` ways from Overpass within the same `BNG_BBOX` as Landcover/Paths,
+and estimates an extrusion height per footprint from its `height`/`building:levels`
+tags, falling back to a flat default (`DEFAULT_BUILDING_HEIGHT` in
+`buildingClassification.js`) for untagged barns/outbuildings. Fully scriptable — no
+manual step, no ordering dependency on steps 1-4.
+
+```bash
+node tools/terrain/fetchBuildings.js
+```
+
+This writes `public/data/terrain/cutgate-buildings.json`.
+
+**v1 scope limit:** only simple closed OSM ways are baked as building footprints —
+multipolygon relations (some larger structures, e.g. dam buildings, can be mapped this
+way) are skipped with a warning, same documented limitation as Landcover's
+`buildPolygons()`.
+
+Same license as Route/Landcover/Paths above (it's the same OSM/ODbL source).
+
+## 6. Water — OpenStreetMap
+
+Bakes real water features near the route — Howden and Derwent Reservoirs, and the
+rivers/streams feeding them (see issue #49) — for `src/scenery/Water.js` to render as a
+flat tinted plane (lakes/reservoirs) or a terrain-following ribbon (rivers/streams, same
+technique as Paths above). Fetches `natural=water`/`landuse=reservoir` polygons and
+`waterway=river`/`stream` ways from Overpass within `BNG_BBOX`. Fully scriptable — no
+manual step, no ordering dependency on steps 1-5.
+
+```bash
+node tools/terrain/fetchWater.js
+```
+
+This writes `public/data/terrain/cutgate-water.json`.
+
+**v1 scope limit:** only simple closed OSM ways are baked as water polygons —
+multipolygon relations (some larger reservoirs can be mapped this way) are skipped with
+a warning, same documented limitation as Buildings/Landcover above.
+
+Same license as Route/Landcover/Paths/Buildings above (it's the same OSM/ODbL source).
+
+## Or: run all six together
 
 ```bash
 npm run terrain:build
 ```
 
-## 5. Trees — LIDAR canopy height model (optional)
+## 7. Trees — LIDAR canopy height model (optional)
 
 Places individual trees (`src/scenery/Scenery.js`) at real positions/heights instead of
 scattering them randomly along the route, by deriving a canopy height model from LIDAR —
