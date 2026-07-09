@@ -55,7 +55,9 @@ function loadAsciiGrid(filePath) {
   };
 }
 
-async function loadGeoTiff(filePath) {
+// Shared GeoTIFF-open + georeferencing step for both the single-band (elevation) and
+// multi-band (RGB aerial photography) readers below.
+async function openGeoTiffImage(filePath) {
   const { fromFile } = await import('geotiff');
   const tiff = await fromFile(filePath);
   const image = await tiff.getImage();
@@ -63,19 +65,68 @@ async function loadGeoTiff(filePath) {
   const ncols = image.getWidth();
   const nrows = image.getHeight();
   const cellsize = (maxY - minY) / nrows;
+  const nodata = image.getGDALNoData() ?? -9999;
+  return { image, xllcorner: minX, yllcorner: minY, cellsize, ncols, nrows, nodata };
+}
+
+async function loadGeoTiff(filePath) {
+  const { image, xllcorner, yllcorner, cellsize, ncols, nrows, nodata } = await openGeoTiffImage(filePath);
   const rasters = await image.readRasters();
   const values = rasters[0];
-  const nodata = image.getGDALNoData() ?? -9999;
 
   return {
-    xllcorner: minX,
-    yllcorner: minY,
+    xllcorner,
+    yllcorner,
     cellsize,
     ncols,
     nrows,
     nodata,
     get: (r, c) => values[r * ncols + c],
   };
+}
+
+// Multi-band reader for RGB(+) rasters like aerial photography GeoTIFFs — used by
+// buildGroundTexture.js instead of loadTile/loadGeoTiff above, which only ever reads
+// band 0 (fine for single-band elevation data, not for colour imagery). Returns the same
+// georeferencing fields as loadGeoTiff/loadAsciiGrid so pixelBoundsForBbox below works
+// against either, plus each band's raw samples and a getPixel(r, c) convenience
+// accessor. Bands beyond the first three (if any, e.g. an alpha/infrared band) are
+// ignored — ground photography is treated as RGB.
+export async function loadRgbGeoTiff(filePath) {
+  const { image, xllcorner, yllcorner, cellsize, ncols, nrows, nodata } = await openGeoTiffImage(filePath);
+  const rasters = await image.readRasters();
+  const bands = [rasters[0], rasters[1] ?? rasters[0], rasters[2] ?? rasters[0]];
+
+  return {
+    xllcorner,
+    yllcorner,
+    cellsize,
+    ncols,
+    nrows,
+    nodata,
+    bands,
+    getPixel: (r, c) => {
+      const i = r * ncols + c;
+      return [bands[0][i], bands[1][i], bands[2][i]];
+    },
+  };
+}
+
+// Converts an easting/northing bbox into the pixel row/col rectangle covering it within
+// `tile` (clamped to the tile's own extent) — e.g. for sharp's extract({left, top, width,
+// height}) to crop a specific real-world area out of a loaded RGB tile. Row 0 is the
+// north edge of the tile, matching sampleTile's rowF convention below.
+export function pixelBoundsForBbox(tile, bbox) {
+  const { xllcorner, yllcorner, cellsize, ncols, nrows } = tile;
+  const colForEasting = (easting) => (easting - xllcorner) / cellsize;
+  const rowForNorthing = (northing) => nrows - (northing - yllcorner) / cellsize;
+
+  const left = Math.max(0, Math.floor(colForEasting(bbox.minE)));
+  const right = Math.min(ncols, Math.ceil(colForEasting(bbox.maxE)));
+  const top = Math.max(0, Math.floor(rowForNorthing(bbox.maxN)));
+  const bottom = Math.min(nrows, Math.ceil(rowForNorthing(bbox.minN)));
+
+  return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
 export function sampleTile(tile, easting, northing) {
@@ -123,6 +174,18 @@ export async function loadTilesFromDir(dirPath) {
   for (const file of files) {
     const tile = await loadTile(join(dirPath, file));
     if (tile) tiles.push(tile);
+  }
+  return tiles;
+}
+
+// RGB counterpart to loadTilesFromDir — aerial photography is only ever delivered as
+// GeoTIFF (no .asc equivalent for colour imagery), used by buildGroundTexture.js against
+// RAW_AERIAL_DIR.
+export async function loadRgbTilesFromDir(dirPath) {
+  const files = readdirSync(dirPath).filter((name) => /\.(tif|tiff)$/i.test(name));
+  const tiles = [];
+  for (const file of files) {
+    tiles.push(await loadRgbGeoTiff(join(dirPath, file)));
   }
   return tiles;
 }

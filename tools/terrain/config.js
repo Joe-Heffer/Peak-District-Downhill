@@ -40,6 +40,10 @@ export const RAW_DIR = new URL('./raw/', import.meta.url);
 // RAW_DIR, since buildTrees.js (unlike buildTerrain.js) needs both rasters at once and
 // they'd otherwise be indistinguishable by filename alone.
 export const RAW_DSM_DIR = new URL('./raw/dsm/', import.meta.url);
+// Aerial photography (APGB/VAP) tiles, same reasoning as RAW_DSM_DIR — a separate
+// subdirectory so buildGroundTexture.js's RGB imagery isn't confused with the DTM's
+// single-band elevation tiles in RAW_DIR.
+export const RAW_AERIAL_DIR = new URL('./raw/aerial/', import.meta.url);
 export const TERRAIN_OUT = new URL('../../public/data/terrain/cutgate.json', import.meta.url);
 export const ROUTE_OUT = new URL('../../public/data/routes/cutgate.json', import.meta.url);
 export const LANDCOVER_OUT = new URL('../../public/data/terrain/cutgate-landcover.json', import.meta.url);
@@ -47,6 +51,26 @@ export const PATHS_OUT = new URL('../../public/data/routes/cutgate-paths.json', 
 export const TREES_OUT = new URL('../../public/data/terrain/cutgate-trees.json', import.meta.url);
 export const BUILDINGS_OUT = new URL('../../public/data/terrain/cutgate-buildings.json', import.meta.url);
 export const WATER_OUT = new URL('../../public/data/terrain/cutgate-water.json', import.meta.url);
+export const GROUNDTEXTURE_OUT = new URL(
+  '../../public/data/terrain/cutgate-groundtexture.json',
+  import.meta.url,
+);
+export const GROUND_TEXTURE_IMAGE_OUT = new URL(
+  '../../public/assets/textures/ground.jpg',
+  import.meta.url,
+);
+
+// A single representative, visually homogeneous sample area within BNG_BBOX to crop the
+// ground texture tile from (open moorland, away from paths/buildings/water, which are
+// already rendered as separate overlays) — found by hand by inspecting the downloaded
+// APGB imagery once available, same spirit as OSM_WAY_IDS above. Placeholder centre
+// point (the bbox centroid) until real imagery has been reviewed and a better spot
+// picked; buildGroundTexture.js clamps this against whatever tiles are actually loaded.
+export const TEXTURE_SAMPLE_AREA = {
+  centerE: (BNG_BBOX.minE + BNG_BBOX.maxE) / 2,
+  centerN: (BNG_BBOX.minN + BNG_BBOX.maxN) / 2,
+  sizeMetres: 40, // cropped square side length, in metres, before downsampling
+};
 
 export const ATTRIBUTION = {
   terrain:
@@ -58,4 +82,8 @@ export const ATTRIBUTION = {
     'Contains public sector information licensed under the Open Government Licence v3.0. ' +
     '© Environment Agency copyright and/or database right. Derived from the LIDAR ' +
     'Composite Digital Surface Model (DSM) minus Composite Digital Terrain Model (DTM).',
+  groundTexture:
+    'Contains public sector information licensed under the Open Government Licence v3.0. ' +
+    '© Environment Agency copyright and/or database right. Derived from Aerial ' +
+    'Photography for Great Britain (APGB) / Vertical Aerial Photography (VAP).',
 };

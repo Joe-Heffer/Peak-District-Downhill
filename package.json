@@ -14,6 +14,7 @@
     "test:e2e": "playwright test",
     "terrain:build": "node tools/terrain/buildTerrain.js && node tools/terrain/fetchRoute.js && node tools/terrain/fetchLandcover.js && node tools/terrain/fetchPaths.js && node tools/terrain/fetchBuildings.js && node tools/terrain/fetchWater.js",
     "terrain:trees": "node tools/terrain/buildTrees.js",
+    "terrain:texture": "node tools/terrain/buildGroundTexture.js",
     "terrain:placeholder": "node tools/terrain/generatePlaceholder.js"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "geotiff": "^3.0.5",
     "jsdom": "^29.1.1",
     "proj4": "^2.15.0",
+    "sharp": "^0.34.4",
     "vite": "8.1.3",
     "vitest": "^4.1.9"
   }

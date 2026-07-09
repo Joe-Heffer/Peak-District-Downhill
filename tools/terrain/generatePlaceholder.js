@@ -18,6 +18,7 @@ import {
   TREES_OUT,
   BUILDINGS_OUT,
   WATER_OUT,
+  GROUNDTEXTURE_OUT,
 } from './config.js';
 import { PATH_CATEGORIES, clipPolylineToBbox } from './pathClassification.js';
 import { estimateCanopyRadius } from './treeDetection.js';
@@ -396,6 +397,16 @@ const waterData = {
   ],
 };
 
+// No placeholder image is generated here — HeightmapTerrain.js's loadRealGroundTexture()
+// already falls back to its procedural canvas texture when ground.jpg is missing, so
+// this metadata-only file is enough to flag the credits UI and e2e test, same as the
+// other seven datasets above.
+const groundTextureData = {
+  placeholder: true,
+  source: PLACEHOLDER_NOTICE,
+  license: PLACEHOLDER_NOTICE,
+};
+
 mkdirSync(dirname(fileURLToPath(TERRAIN_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(ROUTE_OUT)), { recursive: true });
 mkdirSync(dirname(fileURLToPath(PATHS_OUT)), { recursive: true });
@@ -409,10 +420,12 @@ writeFileSync(PATHS_OUT, JSON.stringify(pathsData));
 writeFileSync(TREES_OUT, JSON.stringify(treesData));
 writeFileSync(BUILDINGS_OUT, JSON.stringify(buildingsData));
 writeFileSync(WATER_OUT, JSON.stringify(waterData));
+writeFileSync(GROUNDTEXTURE_OUT, JSON.stringify(groundTextureData));
 
 console.log(`Wrote placeholder terrain (${cols}x${rows} @ ${cellSize}m) and route (${routePoints.length} points).`);
 console.log('Landcover class histogram:', landcoverHistogram);
 console.log(`Wrote placeholder paths (${pathsData.paths.length} segments).`);
 console.log(`Wrote placeholder trees (${trees.length} trees).`);
 console.log(`Wrote placeholder buildings (${buildingsData.buildings.length}) and water (${waterData.polygons.length} polygon, ${waterData.lines.length} line).`);
+console.log('Wrote placeholder ground texture metadata (no image — falls back to the procedural canvas texture).');
 console.log('Reminder: this is synthetic placeholder data, not real Cut Gate topology.');
