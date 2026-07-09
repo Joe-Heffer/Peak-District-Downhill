@@ -71,6 +71,15 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
   `buildScenery()` returns a `THREE.Group` with an `update(dt)` attached, which advances
   the shared `uTime` uniform grass's wind-sway shader reads — `main.js`'s `tick()` calls
   it once per frame alongside `miniMap.update()`/`scoreTracker.update()`.
+- `src/effects/TyreTrackTrail.js` — persistent tyre tracks (issue #168): a visible
+  imprint of where the bike has actually ridden, distinct from `RouteOverlay.js`'s
+  static, intended-route ribbon. `buildTyreTrackTrail()` returns a `THREE.Mesh` with an
+  `update(dt, bike)` attached — sampled once per frame in `main.js`'s `tick()` (after
+  `bike.syncAfterStep()`) from the bike's rear-wheel contact point (grounded via
+  `terrain.getHeightAt`), rebuilt each frame from a capped ring buffer of recorded
+  points so geometry never grows unbounded over a long ride; points also fade/expire by
+  age. Skidding (`bike.brakeActive` while grounded) renders a wider, darker segment than
+  a normal rolling track. `reset()` clears the trail — called alongside `bike.respawn()`.
 - `vite.config.js` — sets `base` to `/Peak-District-Downhill/` under GitHub Actions
   (GitHub Pages subpath), `/` otherwise. Runtime `fetch()` calls for terrain/route data
   must build their URL from `import.meta.env.BASE_URL`, not a hardcoded leading slash,

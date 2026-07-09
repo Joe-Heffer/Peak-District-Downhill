@@ -13,6 +13,7 @@ import { loadRouteData, buildRouteOverlay, routePointToWorld, computeSpawnYaw } 
 import { loadPathsData, buildPathsOverlay } from './routes/PathsOverlay.js';
 import { buildScenery } from './scenery/Scenery.js';
 import { buildGroundMist } from './scene/GroundMist.js';
+import { buildTyreTrackTrail } from './effects/TyreTrackTrail.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { worldToGridRef } from './terrain/gridReference.js';
 import { createMiniMap } from './ui/MiniMap.js';
@@ -195,6 +196,8 @@ async function init() {
   scene.add(scenery);
   const groundMist = buildGroundMist(terrain, preset);
   scene.add(groundMist);
+  const tyreTracks = buildTyreTrackTrail(terrain);
+  scene.add(tyreTracks);
 
   const { world, bikeMaterial } = setupWorld(terrainData);
   const bike = new BikeController(
@@ -231,12 +234,14 @@ async function init() {
 
       if (inputState.reset) {
         bike.respawn();
+        tyreTracks.reset();
         inputState.reset = false;
       }
 
       const jumped = bike.applyInput(dt, inputState);
       world.step(1 / 60, dt, 10);
       bike.syncAfterStep(dt);
+      tyreTracks.update(dt, bike);
 
       if (jumped) audioManager.playOnce('jump', 0.6);
       if (bike.hardLanding) audioManager.playOnce('crash', 0.8);
