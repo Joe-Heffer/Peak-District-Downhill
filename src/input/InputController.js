@@ -20,6 +20,8 @@ export function createInputController(canvas) {
     brake: false,
     boost: false,
     reset: false,
+    gearUp: false,
+    gearDown: false,
     steerAmount: 0, // continuous -1..1 signal, written externally by TiltController
     lookYawOffset: 0, // radians, camera yaw offset from the bike's forward heading
     looking: false, // true while the player is actively drag-to-looking
@@ -34,6 +36,12 @@ export function createInputController(canvas) {
   });
   bindPointerZone('reset-btn', (pressed) => {
     if (pressed) state.reset = true;
+  });
+  bindPointerZone('gear-up-btn', (pressed) => {
+    if (pressed) state.gearUp = true;
+  });
+  bindPointerZone('gear-down-btn', (pressed) => {
+    if (pressed) state.gearDown = true;
   });
 
   // Optional: main.js only has the canvas once setupScene() has run, and tests that
@@ -66,6 +74,12 @@ export function createInputController(canvas) {
         break;
       case 'KeyR':
         if (pressed) state.reset = true;
+        break;
+      case 'KeyE':
+        if (pressed) state.gearUp = true;
+        break;
+      case 'KeyQ':
+        if (pressed) state.gearDown = true;
         break;
       default:
         break;

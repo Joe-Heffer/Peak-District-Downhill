@@ -10,6 +10,8 @@ beforeEach(() => {
     <div id="boost-btn"></div>
     <div id="jump-btn"></div>
     <div id="reset-btn"></div>
+    <div id="gear-up-btn"></div>
+    <div id="gear-down-btn"></div>
   `;
 });
 
@@ -101,6 +103,20 @@ describe('createInputController keyboard bindings', () => {
     // Same edge-triggered pattern as jump — only the consumer clears it.
     expect(state.reset).toBe(true);
   });
+
+  it('sets gearUp/gearDown true on KeyE/KeyQ keydown, and keyup does not reset them (issue #62)', () => {
+    const state = createInputController();
+
+    dispatchKey('keydown', 'KeyE');
+    expect(state.gearUp).toBe(true);
+    dispatchKey('keyup', 'KeyE');
+    expect(state.gearUp).toBe(true);
+
+    dispatchKey('keydown', 'KeyQ');
+    expect(state.gearDown).toBe(true);
+    dispatchKey('keyup', 'KeyQ');
+    expect(state.gearDown).toBe(true);
+  });
 });
 
 describe('createInputController pointer zone bindings', () => {
@@ -156,6 +172,20 @@ describe('createInputController pointer zone bindings', () => {
     expect(state.reset).toBe(true);
     dispatchPointer('reset-btn', 'pointerup');
     expect(state.reset).toBe(true);
+  });
+
+  it('sets gearUp/gearDown true on their pointerdown, and pointerup does not reset them (issue #62)', () => {
+    const state = createInputController();
+
+    dispatchPointer('gear-up-btn', 'pointerdown');
+    expect(state.gearUp).toBe(true);
+    dispatchPointer('gear-up-btn', 'pointerup');
+    expect(state.gearUp).toBe(true);
+
+    dispatchPointer('gear-down-btn', 'pointerdown');
+    expect(state.gearDown).toBe(true);
+    dispatchPointer('gear-down-btn', 'pointerup');
+    expect(state.gearDown).toBe(true);
   });
 });
 
