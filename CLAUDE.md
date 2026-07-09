@@ -54,7 +54,12 @@ parallel jobs) on every push/PR to `main`. There is still no linter configured.
 - `src/terrain/` — loads `public/data/terrain/*.json` (elevation + landcover) and builds
   the terrain mesh + the `getHeightAt(x, z)` lookup shared by physics and the route
   overlay. Landcover drives per-vertex tint colors (grass/wood/rock/heather/track) on
-  the mesh's single `MeshStandardMaterial`, blended via `vertexColors`.
+  a single shared `MeshStandardMaterial`, blended via `vertexColors`. The visual mesh
+  (issue #71) is chunked, not one `BufferGeometry`: `buildTerrainLOD` tiles the grid into
+  a `THREE.Group` of `THREE.LOD` objects (`buildChunkLevelGeometry` builds each chunk's
+  geometry at a given decimation stride), so distant chunks render fewer triangles. The
+  physics heightfield (`setupWorld.js`) stays full-resolution and untouched by this — see
+  "Terrain mesh/physics alignment" below.
 - `src/routes/` — loads `public/data/routes/*.json` and renders the route as a
   decorative trail line on the terrain. `RouteOverlay.js` itself has no gameplay
   coupling, but `main.js` does use the route's first point (via the shared
@@ -129,7 +134,11 @@ The terrain mesh (`src/terrain/HeightmapTerrain.js`) and the physics heightfield
 (`src/physics/setupWorld.js`) are built from the exact same `heights[i][j]` array with a
 deliberately matched axis mapping (`i`→world x, `j`→world `-z`, value→world y, achieved
 via the heightfield body's -90°-about-X rotation) so they stay pixel-aligned. Don't
-change one side's indexing/rotation without updating the other to match.
+change one side's indexing/rotation without updating the other to match — including
+`buildTerrainLOD`'s chunking: each chunk's geometry is built in coordinates local to its
+own corner, but the wrapping `THREE.LOD`'s `position` offsets it back to the exact same
+world position this mapping describes, at every LOD level (decimation only drops
+in-between vertices, it never shifts the ones it keeps).
 
 ## Tests
 

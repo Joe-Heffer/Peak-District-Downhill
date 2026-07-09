@@ -38,7 +38,7 @@ function stubGameState(overrides = {}) {
     world: {},
     scene: {},
     camera: {},
-    terrain: { mesh: { material: { wireframe: false } }, getHeightAt: () => 0 },
+    terrain: { material: { wireframe: false }, getHeightAt: () => 0 },
     terrainData: { origin: { easting: 100, northing: 200 } },
     routeData: {},
     ...overrides,
@@ -176,9 +176,9 @@ describe('createDevTools admin commands', () => {
     devTools.attachGameState(gameState);
 
     typeCommand('wireframe');
-    expect(gameState.terrain.mesh.material.wireframe).toBe(true);
+    expect(gameState.terrain.material.wireframe).toBe(true);
     typeCommand('wireframe');
-    expect(gameState.terrain.mesh.material.wireframe).toBe(false);
+    expect(gameState.terrain.material.wireframe).toBe(false);
   });
 
   it('an unknown command warns without throwing', () => {

@@ -220,7 +220,7 @@ export function createDevTools() {
     },
     wireframe: {
       run() {
-        const material = gameState.terrain.mesh.material;
+        const material = gameState.terrain.material;
         material.wireframe = !material.wireframe;
         console.log(`Wireframe ${material.wireframe ? 'on' : 'off'}.`);
       },

@@ -76,26 +76,62 @@ function loadRealGroundTexture(material, maxAnisotropy) {
   );
 }
 
-// Builds the terrain mesh directly in final world coordinates: vertex (i, j) sits at
-// (i * cellSize, heights[i][j], -j * cellSize). No rotation/position offset is applied —
-// this exact axis mapping is deliberately mirrored by the CANNON.Heightfield body built
-// in setupWorld.js (see the comment there) so the visual mesh and physics collider stay
-// pixel-aligned from the same `heights` array.
-//
-// No THREE.LOD here: the production grid (108x248, ~54K tris) is trivial for any modern
-// GPU, and LOD keyed on distance-to-object doesn't suit a single mesh the camera always
-// rides on top of — the bike (and camera) can be anywhere across this ~1.6km x 3.7km grid,
-// so distance to one anchor point isn't a useful proxy for which part needs detail. A
-// correct fix would chunk the terrain into many tiled meshes, each with its own LOD levels
-// — a materially bigger change than issue #71's LOD proposal implies, and left undone here.
-export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotropy = 1) {
-  const { cols, rows, cellSize, heights } = terrainData;
+// Number of cells (not vertices) a chunk spans along one axis before the grid is split
+// again — see buildTerrainLOD. Chosen so the production grid (108x248) yields a 4x8
+// chunk layout: enough chunks for LOD to matter, not so many that per-chunk overhead
+// (draw calls, duplicated boundary vertices) dominates.
+const CHUNK_CELLS = 32;
 
-  if (landcoverData && (landcoverData.cols !== cols || landcoverData.rows !== rows)) {
-    throw new Error(
-      'Landcover grid dimensions do not match the terrain grid — rerun tools/terrain/fetchLandcover.js.',
-    );
+// Decimation stride per LOD level (1 = full resolution) and the camera distance (metres)
+// at which THREE.LOD switches to it. Index-aligned with each other.
+const LOD_STRIDES = [1, 2, 4];
+const LOD_DISTANCES = [0, 150, 400];
+
+// Splits [0, count - 1] into contiguous [start, end] index ranges of at most `chunkCells`
+// cells each. Adjacent ranges share their boundary index (chunk N's `end` === chunk N+1's
+// `start`) so same-LOD-level chunks meet without a seam.
+export function computeChunkBounds(count, chunkCells) {
+  const last = count - 1;
+  if (last <= 0) return [[0, 0]];
+
+  const bounds = [];
+  let start = 0;
+  while (start < last) {
+    const end = Math.min(start + chunkCells, last);
+    bounds.push([start, end]);
+    start = end;
   }
+  return bounds;
+}
+
+// Grid indices from `start` to `end` (inclusive) in steps of `stride`, always including
+// `end` itself even when it isn't an exact multiple of stride away from the last step —
+// this keeps every chunk's outer edge exact at every LOD level, at the cost of one
+// slightly uneven row/column of quads just inside that edge for non-divisible spans.
+export function strideIndices(start, end, stride) {
+  const indices = [];
+  for (let v = start; v < end; v += stride) indices.push(v);
+  indices.push(end);
+  return indices;
+}
+
+// Builds one chunk's geometry at a given decimation stride, in coordinates local to the
+// chunk's own (iStart, jStart) corner — i.e. vertex (i, j) sits at
+// ((i - iStart) * cellSize, heights[i][j], -(j - jStart) * cellSize). buildTerrainLOD
+// positions the wrapping THREE.LOD object at (iStart * cellSize, 0, -jStart * cellSize)
+// so the final world position is still exactly (i * cellSize, heights[i][j],
+// -j * cellSize) — the same mapping the CANNON.Heightfield in setupWorld.js mirrors, and
+// it's the *absolute* i/j (not chunk-local) that still drives UVs so the ground texture
+// tiles continuously across chunk boundaries.
+export function buildChunkLevelGeometry(terrainData, landcoverData, bounds, stride) {
+  const { cellSize, heights } = terrainData;
+  const [iStart, iEnd] = bounds.i;
+  const [jStart, jEnd] = bounds.j;
+  const is = strideIndices(iStart, iEnd, stride);
+  const js = strideIndices(jStart, jEnd, stride);
+  const cols = is.length;
+  const rows = js.length;
+
   const palette = landcoverData
     ? landcoverData.classes.map((name) => CLASS_COLORS[name] ?? CLASS_COLORS.grass)
     : null;
@@ -103,20 +139,22 @@ export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotrop
   const positions = new Float32Array(cols * rows * 3);
   const uvs = new Float32Array(cols * rows * 2);
   const colors = landcoverData ? new Float32Array(cols * rows * 3) : null;
-  for (let i = 0; i < cols; i += 1) {
-    for (let j = 0; j < rows; j += 1) {
-      const posIndex = (i * rows + j) * 3;
-      positions[posIndex] = i * cellSize;
+  for (let ci = 0; ci < cols; ci += 1) {
+    const i = is[ci];
+    for (let cj = 0; cj < rows; cj += 1) {
+      const j = js[cj];
+      const posIndex = (ci * rows + cj) * 3;
+      positions[posIndex] = (i - iStart) * cellSize;
       positions[posIndex + 1] = heights[i][j];
-      positions[posIndex + 2] = -j * cellSize;
+      positions[posIndex + 2] = -(j - jStart) * cellSize;
 
-      const uvIndex = (i * rows + j) * 2;
+      const uvIndex = (ci * rows + cj) * 2;
       uvs[uvIndex] = (i * cellSize) / TILE_SIZE;
       uvs[uvIndex + 1] = (j * cellSize) / TILE_SIZE;
 
       if (colors) {
         const color = palette[landcoverData.landcover[i][j]];
-        const colorIndex = (i * rows + j) * 3;
+        const colorIndex = (ci * rows + cj) * 3;
         colors[colorIndex] = color.r;
         colors[colorIndex + 1] = color.g;
         colors[colorIndex + 2] = color.b;
@@ -125,12 +163,12 @@ export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotrop
   }
 
   const indices = [];
-  for (let i = 0; i < cols - 1; i += 1) {
-    for (let j = 0; j < rows - 1; j += 1) {
-      const a = i * rows + j;
-      const b = (i + 1) * rows + j;
-      const c = (i + 1) * rows + (j + 1);
-      const d = i * rows + (j + 1);
+  for (let ci = 0; ci < cols - 1; ci += 1) {
+    for (let cj = 0; cj < rows - 1; cj += 1) {
+      const a = ci * rows + cj;
+      const b = (ci + 1) * rows + cj;
+      const c = (ci + 1) * rows + (cj + 1);
+      const d = ci * rows + (cj + 1);
       indices.push(a, b, d, b, c, d);
     }
   }
@@ -141,13 +179,50 @@ export function buildTerrainMesh(terrainData, landcoverData = null, maxAnisotrop
   if (colors) geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+  return geometry;
+}
 
-  const material = new THREE.MeshStandardMaterial({
-    map: createPlaceholderGroundTexture(maxAnisotropy),
-    vertexColors: Boolean(colors),
-  });
-  loadRealGroundTexture(material, maxAnisotropy);
-  return new THREE.Mesh(geometry, material);
+// Tiles the terrain into a grid of THREE.LOD chunks sharing one material, each swapping
+// between 1-3 decimated geometries (LOD_STRIDES/LOD_DISTANCES) by its own distance to the
+// camera — unlike a single whole-grid THREE.LOD, per-chunk distance is a meaningful proxy
+// for detail here since the bike (and camera) can be anywhere across this ~1.6km x 3.7km
+// grid. THREE.LOD.autoUpdate defaults to true, so WebGLRenderer switches levels itself;
+// no per-frame code is needed in main.js.
+//
+// Known limitation: chunks share exact boundary vertices at the *same* LOD level (see
+// computeChunkBounds), but two adjacent chunks showing *different* levels can show a thin
+// T-junction seam along that edge, since the coarser chunk skips vertices the finer one
+// keeps. Not fixed here (would need skirts or edge-stitching) — acceptable for this game's
+// stylised, non-photorealistic terrain; revisit if it reads as a visible crack in practice.
+export function buildTerrainLOD(terrainData, landcoverData, material, chunkCells = CHUNK_CELLS) {
+  const { cols, rows, cellSize } = terrainData;
+
+  if (landcoverData && (landcoverData.cols !== cols || landcoverData.rows !== rows)) {
+    throw new Error(
+      'Landcover grid dimensions do not match the terrain grid — rerun tools/terrain/fetchLandcover.js.',
+    );
+  }
+
+  const iBounds = computeChunkBounds(cols, chunkCells);
+  const jBounds = computeChunkBounds(rows, chunkCells);
+
+  const group = new THREE.Group();
+  for (const [iStart, iEnd] of iBounds) {
+    for (const [jStart, jEnd] of jBounds) {
+      const bounds = { i: [iStart, iEnd], j: [jStart, jEnd] };
+      const lod = new THREE.LOD();
+      LOD_STRIDES.forEach((stride, level) => {
+        // A stride coarser than the chunk itself would just repeat level 0's geometry —
+        // stop adding levels once that happens instead of building redundant meshes.
+        if (level > 0 && stride >= iEnd - iStart && stride >= jEnd - jStart) return;
+        const geometry = buildChunkLevelGeometry(terrainData, landcoverData, bounds, stride);
+        lod.addLevel(new THREE.Mesh(geometry, material), LOD_DISTANCES[level]);
+      });
+      lod.position.set(iStart * cellSize, 0, -jStart * cellSize);
+      group.add(lod);
+    }
+  }
+  return group;
 }
 
 // Bilinear height lookup shared by bike grounding and route elevation sampling — no raw
@@ -204,8 +279,15 @@ export function createLandcoverLookup(landcoverData) {
 }
 
 export function createTerrain(terrainData, landcoverData, maxAnisotropy) {
+  const material = new THREE.MeshStandardMaterial({
+    map: createPlaceholderGroundTexture(maxAnisotropy),
+    vertexColors: Boolean(landcoverData),
+  });
+  loadRealGroundTexture(material, maxAnisotropy);
+
   return {
-    mesh: buildTerrainMesh(terrainData, landcoverData, maxAnisotropy),
+    mesh: buildTerrainLOD(terrainData, landcoverData, material),
+    material,
     getHeightAt: createHeightLookup(terrainData),
     getLandcoverAt: createLandcoverLookup(landcoverData),
     data: terrainData,
