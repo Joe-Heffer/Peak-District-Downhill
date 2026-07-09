@@ -3,6 +3,14 @@ name: Deploy to itch.io
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - '.github/workflows/itch-deploy.yml'
   workflow_dispatch:
 
 permissions:

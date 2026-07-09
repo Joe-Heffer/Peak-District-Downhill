@@ -3,8 +3,21 @@ name: CI
 on:
   push:
     branches: [main]
+    paths: &ci-paths
+      - 'src/**'
+      - 'public/**'
+      - 'tools/**'
+      - 'e2e/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.js'
+      - 'vitest.config.js'
+      - 'playwright.config.js'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths: *ci-paths
 
 permissions:
   contents: read
