@@ -1141,3 +1141,50 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
     expect(ebike.maxSpeed).toBe(EBIKE_MAX_SPEED);
   });
 });
+
+describe('BikeController free-look camera (issue #39)', () => {
+  it('tracks the raw lookYawOffset directly while inputState.looking is true', () => {
+    const bike = createBike();
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+
+    bike.applyInput(1 / 60, { ...input, looking: true, lookYawOffset: 0.8 });
+    bike.syncAfterStep(1 / 60);
+    expect(bike.cameraYawOffset).toBeCloseTo(0.8);
+
+    bike.applyInput(1 / 60, { ...input, looking: true, lookYawOffset: -0.5 });
+    bike.syncAfterStep(1 / 60);
+    expect(bike.cameraYawOffset).toBeCloseTo(-0.5);
+  });
+
+  it('decays cameraYawOffset back toward 0 once looking stops, without snapping instantly', () => {
+    const bike = createBike();
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+
+    bike.applyInput(1 / 60, { ...input, looking: true, lookYawOffset: 1.0 });
+    bike.syncAfterStep(1 / 60);
+    expect(bike.cameraYawOffset).toBeCloseTo(1.0);
+
+    bike.applyInput(1 / 60, { ...input, looking: false, lookYawOffset: 1.0 });
+    bike.syncAfterStep(0.1);
+    expect(bike.cameraYawOffset).toBeGreaterThan(0);
+    expect(bike.cameraYawOffset).toBeLessThan(1.0);
+
+    for (let i = 0; i < 180; i += 1) {
+      bike.applyInput(1 / 60, { ...input, looking: false, lookYawOffset: 1.0 });
+      bike.syncAfterStep(1 / 60);
+    }
+    expect(bike.cameraYawOffset).toBeCloseTo(0, 2);
+  });
+
+  it('defaults to no look offset when inputState has no look fields (non-canvas callers)', () => {
+    const bike = createBike();
+    const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+
+    bike.applyInput(1 / 60, input);
+    bike.syncAfterStep(1 / 60);
+
+    expect(bike.looking).toBe(false);
+    expect(bike.lookYawInput).toBe(0);
+    expect(bike.cameraYawOffset).toBe(0);
+  });
+});

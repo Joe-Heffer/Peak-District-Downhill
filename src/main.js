@@ -211,7 +211,7 @@ async function init() {
     pickBikePreset(),
   );
   devTools.attachGameState({ bike, world, scene, camera, terrain, terrainData, routeData, scoreTracker });
-  const inputState = createInputController();
+  const inputState = createInputController(renderer.domElement);
 
   window.addEventListener('keydown', resumeAudioOnGesture, { once: true });
   window.addEventListener('pointerdown', resumeAudioOnGesture, { once: true });
