@@ -21,7 +21,11 @@ This starts the Vite dev server at the URL printed in your terminal.
    whole page (input wiring, credits text, overall load), also consider the e2e suite
    under `e2e/` (`npm run build && npm run test:e2e`).
 4. Confirm the app still builds: `npm run build`.
-5. Open a pull request against `main`.
+5. Open a pull request against `main`. If it resolves an open issue, link the two so
+   merging the PR closes the issue automatically — include a closing keyword such as
+   `Closes #123` in the PR description (see [GitHub's docs on linking a pull request to
+   an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)).
+   The PR template includes a spot for this.
 6. **Merge with "Squash and merge"**, not "Create a merge commit". This repo's merge
    button should have "Allow merge commits" disabled (GitHub repo Settings → General →
    Pull Requests) — see the note under [Releases](#releases) for why.
