@@ -85,16 +85,21 @@ function loadRealRockTrackTexture(material, maxAnisotropy) {
   );
 }
 
-// One shared material for every rideable-surface ribbon (route + road + bridleway +
-// footpath) — cheaper than one texture per mesh and guarantees a consistent rocky
-// look everywhere. Per-category tint still comes from each ribbon's own vertex colors
-// (see PathsOverlay.js's PATH_STYLES / RouteOverlay.js's ROUTE_STYLE), multiplied
-// against this shared texture.
-export function createRockTrackMaterial(maxAnisotropy) {
+// One material factory for every rideable-surface ribbon (route + road + bridleway +
+// footpath) — same texture/look everywhere, generated fresh per call so the route and
+// the paths network can each get their own material instance (see main.js). That split
+// matters because flatShading is a material-level flag: turning it on facets the
+// now-uneven route ribbon's new rock relief (see RouteOverlay.js's ROUTE_STYLE.rockiness)
+// to match the low-poly scattered rocks' look, but consecutive PathsOverlay.js quads
+// aren't generally coplanar with each other either (each follows a different terrain
+// height), so flatShading would also visibly facet their slope transitions if it were
+// set on a material the two shared — hence a per-instance option instead of a fixed flag.
+export function createRockTrackMaterial(maxAnisotropy, { flatShading = false } = {}) {
   const material = new THREE.MeshStandardMaterial({
     map: createPlaceholderRockTrackTexture(maxAnisotropy),
     vertexColors: true,
     side: THREE.DoubleSide,
+    flatShading,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,

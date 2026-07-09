@@ -4,6 +4,7 @@ import { createRandom } from '../procgen/createRandom.js';
 import { buildRouteCurve } from '../procgen/routeCurve.js';
 import { sampleAlongRoute } from '../procgen/sampleAlongRoute.js';
 import { jitterLateral } from '../procgen/jitterLateral.js';
+import { filterByLandcover } from '../procgen/filterByLandcover.js';
 import { groundPoints } from '../procgen/groundPoints.js';
 import { toInstanceMatrices } from '../procgen/toInstanceMatrices.js';
 import { buildGrass } from './Grass.js';
@@ -20,9 +21,20 @@ const ROCK_SKIP_PROBABILITY = 0.67;
 const ROCK_COLOR = 0x8f8a80; // matches HeightmapTerrain's CLASS_COLORS.rock
 const TREE_COLOR = 0x3d4d30; // matches HeightmapTerrain's CLASS_COLORS.wood
 export const TREE_UNIT_HEIGHT = 3; // cone geometry's baked height; scaled per-instance below
-// Rocks use SEED, trees SEED + 1, grass SEED + 2 (see Grass.js) — one shared scheme so
-// every scattered content type gets its own reproducible random stream.
+// Rocks use SEED, trees SEED + 1, grass SEED + 2 (see Grass.js), edge rocks SEED + 3 —
+// one shared scheme so every scattered content type gets its own reproducible random stream.
 const SEED = 1337;
+
+// A denser, chunkier rock band hugging the trail's rim (close lateral range, restricted
+// to track/rock landcover) — visually frames the ridden route's own rocky relief (see
+// RouteOverlay.js's ROUTE_STYLE.rockiness) rather than scattering loosely across the
+// whole corridor like the LATERAL_MIN..LATERAL_MAX band above.
+const EDGE_ROCK_SAMPLE_SPACING = 4; // metres — denser than the main rock band's 10m
+export const EDGE_ROCK_LATERAL_MIN = 1.3; // metres from centreline — just outside the 2.2m-wide ribbon
+export const EDGE_ROCK_LATERAL_MAX = 2.4;
+const EDGE_ROCK_SKIP_PROBABILITY = 0.55;
+const EDGE_ROCK_LANDCOVER = ['track', 'rock'];
+const EDGE_ROCK_SEED = SEED + 3;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -64,6 +76,31 @@ function buildRockMatrices(routeData, terrain) {
   });
 }
 
+// A tighter, chunkier rock band right along the trail rim — frames the route ribbon's
+// own rock relief instead of scattering loosely across the whole corridor like
+// buildRockMatrices above. Same procgen pipeline, plus filterByLandcover so instances
+// only land on the track itself or adjacent rock ground, not stray onto grass/heather.
+function buildEdgeRockMatrices(routeData, terrain) {
+  const random = createRandom(EDGE_ROCK_SEED);
+  const curve = buildRouteCurve(routeData, terrain);
+  const samples = sampleAlongRoute(curve, EDGE_ROCK_SAMPLE_SPACING);
+  const candidates = jitterLateral(samples, random, {
+    lateralMin: EDGE_ROCK_LATERAL_MIN,
+    lateralMax: EDGE_ROCK_LATERAL_MAX,
+    skipProbability: EDGE_ROCK_SKIP_PROBABILITY,
+  });
+  const filtered = filterByLandcover(candidates, terrain, EDGE_ROCK_LANDCOVER);
+  const grounded = groundPoints(filtered, terrain);
+
+  // Sized as chunky trailside stones, not boulders: IcosahedronGeometry(1,0) has a 1m
+  // base radius, so 0.35-0.8 scale keeps these under ~1.6m across — well inside the
+  // main rock band's larger 0.75-1.5 scale range — so the edge band frames the narrow
+  // 2.2m-wide ribbon instead of swallowing it.
+  return toInstanceMatrices(grounded, random, {
+    scaleFn: (point, rnd) => 0.35 + rnd() * 0.45,
+  });
+}
+
 // Trees are placed at real positions/heights derived from LIDAR canopy data (nDSM local
 // maxima — see tools/terrain/buildTrees.js and issue #50), not randomly scattered, so
 // woodland only appears where Cut Gate actually has real wooded sections. Grounded via
@@ -99,6 +136,7 @@ export function buildScenery(routeData, treesData, terrain) {
   const group = new THREE.Group();
   group.add(buildInstancedMesh(buildTreeGeometry(), TREE_COLOR, buildTreeMatrices(treesData, terrain)));
   group.add(buildInstancedMesh(buildRockGeometry(), ROCK_COLOR, buildRockMatrices(routeData, terrain)));
+  group.add(buildInstancedMesh(buildRockGeometry(), ROCK_COLOR, buildEdgeRockMatrices(routeData, terrain)));
 
   const windUniform = { value: 0 };
   group.add(buildGrass(routeData, terrain, windUniform));
