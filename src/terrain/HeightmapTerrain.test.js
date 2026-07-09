@@ -69,18 +69,51 @@ describe('createHeightLookup / getHeightAt', () => {
     }
   });
 
-  it('bilinearly interpolates the midpoint between four grid corners', () => {
+  it('interpolates the cell centre along the shared (i+1,j)-(i,j+1) diagonal', () => {
+    // terrainData's corners happen to lie on a single plane (heights[i][j] = i + j), so
+    // the cell centre — which sits exactly on that diagonal — comes out the same whether
+    // interpolated via the diagonal split or a naive bilinear blend across all 4 corners.
+    // The non-planar-quad test below is what actually distinguishes the two.
     const getHeightAt = createHeightLookup(terrainData);
 
-    const h00 = terrainData.heights[0][0];
     const h10 = terrainData.heights[1][0];
     const h01 = terrainData.heights[0][1];
-    const h11 = terrainData.heights[1][1];
-    const expectedMidpoint = (h00 + h10 + h01 + h11) / 4;
+    const expectedMidpoint = (h10 + h01) / 2;
 
     const x = terrainData.cellSize / 2;
     const z = -terrainData.cellSize / 2;
     expect(getHeightAt(x, z)).toBeCloseTo(expectedMidpoint);
+  });
+
+  it('interpolates a non-planar cell as the same two flat triangles buildTerrainMesh renders, not a bilinear blend', () => {
+    // A saddle-shaped quad (corners not coplanar) is where triangulated and bilinear
+    // interpolation diverge — buildTerrainMesh's two triangles per cell are split along
+    // the (i+1,j)-(i,j+1) diagonal (matching cannon-es's Heightfield collision pillars),
+    // so getHeightAt must follow that same split rather than blend across the full cell.
+    const saddle = {
+      cols: 2,
+      rows: 2,
+      cellSize: 10,
+      heights: [
+        [0, 10],
+        [10, 0],
+      ],
+    };
+    const getHeightAt = createHeightLookup(saddle);
+    const x = saddle.cellSize / 2;
+    const z = -saddle.cellSize / 2;
+
+    // Bilinear would give (0+10+10+0)/4 = 5 here; the triangulated surface instead sits
+    // on the h10-h01 diagonal (10, 10), so the centre is 10, not 5.
+    expect(getHeightAt(x, z)).toBeCloseTo(10);
+
+    // Off-centre, on either side of the diagonal, each point should land on its own
+    // triangle's plane rather than the bilinear blend.
+    const nearA = { x: saddle.cellSize * 0.2, z: -saddle.cellSize * 0.2 }; // near h00 corner, u+v < 1
+    expect(getHeightAt(nearA.x, nearA.z)).toBeCloseTo(0 + (10 - 0) * 0.2 + (10 - 0) * 0.2);
+
+    const nearC = { x: saddle.cellSize * 0.8, z: -saddle.cellSize * 0.8 }; // near h11 corner, u+v > 1
+    expect(getHeightAt(nearC.x, nearC.z)).toBeCloseTo(10 * (1 - 0.8) + 10 * (1 - 0.8) + 0 * (0.8 + 0.8 - 1));
   });
 
   it('clamps out-of-bounds coordinates to the nearest edge', () => {
