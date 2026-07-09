@@ -30,6 +30,17 @@ const EBIKE_MAX_SPEED = 35;
 const REVERSE_STEER_SPEED_THRESHOLD = 0.5;
 const WHEEL_FRONT = 0;
 const WHEEL_REAR = 1;
+const GEARS = [
+  { accel: 1.6, topSpeed: 0.55 },
+  { accel: 1.3, topSpeed: 0.75 },
+  { accel: 1.0, topSpeed: 1.0 },
+  { accel: 0.8, topSpeed: 1.2 },
+  { accel: 0.65, topSpeed: 1.4 },
+];
+const DEFAULT_GEAR_INDEX = 2;
+const GEAR_UPSHIFT_SPEED = [4, 8, 13, 18];
+const GEAR_DOWNSHIFT_SPEED = [2, 5, 9, 14];
+const GEAR_SHIFT_COOLDOWN = 0.3;
 
 let terrain;
 let scene;
@@ -257,6 +268,7 @@ describe('BikeController.applyInput propulsion/braking (issue #66: real wheel fo
 
   it('applies boost acceleration (superseding baseline) to the chassis while boosting with stamina available', () => {
     const bike = createBike();
+    bike.gearMode = 'manual'; // isolate boost/baseline logic from auto gear-shifting (issue #62)
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
     const forward = forwardVec(bike);
     expect(bike.body.force.x).toBeCloseTo(forward.x * BOOST_ACCEL * BIKE_MASS);
@@ -265,6 +277,7 @@ describe('BikeController.applyInput propulsion/braking (issue #66: real wheel fo
 
   it('applies only baseline acceleration (zero extra boost) to the chassis while boosting with empty stamina', () => {
     const bike = createBike();
+    bike.gearMode = 'manual'; // isolate boost/baseline logic from auto gear-shifting (issue #62)
     bike.stamina = 0;
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true });
     const forward = forwardVec(bike);
@@ -274,6 +287,7 @@ describe('BikeController.applyInput propulsion/braking (issue #66: real wheel fo
 
   it('applies only baseline acceleration to the chassis when not boosting', () => {
     const bike = createBike();
+    bike.gearMode = 'manual'; // isolate boost/baseline logic from auto gear-shifting (issue #62)
     bike.applyInput(1 / 60, { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false });
     const forward = forwardVec(bike);
     expect(bike.body.force.x).toBeCloseTo(forward.x * BASELINE_ACCEL * BIKE_MASS);
@@ -391,6 +405,7 @@ describe('BikeController longitudinal dynamics on real sloped ground (issue #66:
   it('sustains a steady baseline cruising speed on flat ground with no input at all (issue #139: no more crawl-to-a-stop)', () => {
     createGroundBody(world);
     const bike = createBike();
+    bike.gearMode = 'manual'; // isolate the baseline cruise equilibrium from auto gear-shifting (issue #62)
     const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false };
     const dt = 1 / 60;
 
@@ -628,9 +643,11 @@ describe('BikeController stamina', () => {
     const boostInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
 
     const fullStaminaBike = createBike();
+    fullStaminaBike.gearMode = 'manual'; // isolate boost/baseline logic from auto gear-shifting (issue #62)
     fullStaminaBike.applyInput(1, boostInput);
 
     const emptyStaminaBike = createBike();
+    emptyStaminaBike.gearMode = 'manual';
     emptyStaminaBike.stamina = 0;
     emptyStaminaBike.applyInput(1, boostInput);
 
@@ -905,6 +922,7 @@ describe('BikeController rider pose (issue #126)', () => {
     createGroundBody(world, { slope });
     terrain = { getHeightAt: (x, z) => slope * z };
     const bike = createBike();
+    bike.gearMode = 'manual'; // isolate the climb dynamics from auto gear-shifting (issue #62)
     const input = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: true };
     const dt = 1 / 60;
 
@@ -995,6 +1013,19 @@ describe('BikeController.respawn (issue #81)', () => {
     expect(bike.vehicle.wheelInfos[WHEEL_REAR].engineForce).toBe(0);
     expect(bike.vehicle.wheelInfos[WHEEL_FRONT].brake).toBe(0);
     expect(bike.vehicle.wheelInfos[WHEEL_FRONT].steering).toBe(0);
+  });
+
+  it('resets gearIndex/gearMode/gearShiftCooldown back to their defaults (issue #62)', () => {
+    const bike = createBike();
+    bike.gearIndex = GEARS.length - 1;
+    bike.gearMode = 'manual';
+    bike.gearShiftCooldown = 0.2;
+
+    bike.respawn();
+
+    expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX);
+    expect(bike.gearMode).toBe('auto');
+    expect(bike.gearShiftCooldown).toBe(0);
   });
 });
 
@@ -1091,6 +1122,7 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
 
   it('applies a stronger baseline and boost chassis force under the ebike preset than default', () => {
     const defaultBike = createBike();
+    defaultBike.gearMode = 'manual'; // isolate preset scaling from auto gear-shifting (issue #62)
     const ebike = new BikeController(
       scene,
       world,
@@ -1101,6 +1133,7 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
       false,
       'ebike',
     );
+    ebike.gearMode = 'manual';
     const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
     const boostInput = { ...noInput, boost: true };
 
@@ -1139,6 +1172,175 @@ describe('BikeController bike presets (issue #110: e-bike mode)', () => {
 
     expect(ebike.speed).toBeCloseTo(30);
     expect(ebike.maxSpeed).toBe(EBIKE_MAX_SPEED);
+  });
+});
+
+describe('BikeController gear change mechanic (issue #62)', () => {
+  const noInput = { steerLeft: false, steerRight: false, jump: false, brake: false, boost: false };
+
+  it('starts in auto mode at the default (neutral) gear', () => {
+    const bike = createBike();
+    expect(bike.gearMode).toBe('auto');
+    expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX);
+  });
+
+  describe('automatic shifting', () => {
+    it('upshifts once speed exceeds the boundary above the current gear', () => {
+      const bike = createBike();
+      bike.speed = GEAR_UPSHIFT_SPEED[DEFAULT_GEAR_INDEX] + 1;
+
+      bike.applyInput(1 / 60, noInput);
+
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+    });
+
+    it('downshifts once speed drops below the boundary of the gear below', () => {
+      const bike = createBike();
+      bike.speed = GEAR_DOWNSHIFT_SPEED[DEFAULT_GEAR_INDEX - 1] - 1;
+
+      bike.applyInput(1 / 60, noInput);
+
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX - 1);
+    });
+
+    it('does not hunt back down while speed sits in the hysteresis gap after an upshift', () => {
+      const bike = createBike();
+      bike.speed = GEAR_UPSHIFT_SPEED[DEFAULT_GEAR_INDEX] + 1;
+      bike.applyInput(1 / 60, noInput);
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+
+      // Below the upshift threshold that just fired, but still above the new gear's own
+      // (lower) downshift threshold — a real hunting bug would flip this back every frame.
+      bike.speed = GEAR_UPSHIFT_SPEED[DEFAULT_GEAR_INDEX] - 1;
+      bike.applyInput(1 / 60, noInput);
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+    });
+
+    it('does not shift above the top gear even at extreme speed', () => {
+      const bike = createBike();
+      bike.gearIndex = GEARS.length - 1;
+      bike.speed = 1000;
+
+      bike.applyInput(1 / 60, noInput);
+
+      expect(bike.gearIndex).toBe(GEARS.length - 1);
+    });
+
+    it('does not shift below the bottom gear even at zero speed', () => {
+      const bike = createBike();
+      bike.gearIndex = 0;
+      bike.speed = 0;
+
+      bike.applyInput(1 / 60, noInput);
+
+      expect(bike.gearIndex).toBe(0);
+    });
+  });
+
+  describe('manual shifting', () => {
+    it('switches to manual mode and shifts up on gearUp, consuming the input flag', () => {
+      const bike = createBike();
+      const upInput = { ...noInput, gearUp: true };
+
+      bike.applyInput(1 / 60, upInput);
+
+      expect(bike.gearMode).toBe('manual');
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+      expect(upInput.gearUp).toBe(false);
+    });
+
+    it('shifts down on gearDown, consuming the input flag', () => {
+      const bike = createBike();
+      const downInput = { ...noInput, gearDown: true };
+
+      bike.applyInput(1 / 60, downInput);
+
+      expect(bike.gearMode).toBe('manual');
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX - 1);
+      expect(downInput.gearDown).toBe(false);
+    });
+
+    it('clamps manual shifts at the top and bottom gear', () => {
+      const topBike = createBike();
+      topBike.gearIndex = GEARS.length - 1;
+      topBike.gearMode = 'manual';
+      topBike.applyInput(1 / 60, { ...noInput, gearUp: true });
+      expect(topBike.gearIndex).toBe(GEARS.length - 1);
+
+      const bottomBike = createBike();
+      bottomBike.gearIndex = 0;
+      bottomBike.gearMode = 'manual';
+      bottomBike.applyInput(1 / 60, { ...noInput, gearDown: true });
+      expect(bottomBike.gearIndex).toBe(0);
+    });
+
+    it('debounces shifts with a cooldown so a rapid repeat only shifts once', () => {
+      const bike = createBike();
+      bike.applyInput(1 / 60, { ...noInput, gearUp: true });
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+
+      // Still within GEAR_SHIFT_COOLDOWN — shouldn't shift again yet.
+      bike.applyInput(1 / 60, { ...noInput, gearUp: true });
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 1);
+
+      // Advance dt past the cooldown — the next press shifts again.
+      bike.applyInput(GEAR_SHIFT_COOLDOWN, { ...noInput, gearUp: true });
+      expect(bike.gearIndex).toBe(DEFAULT_GEAR_INDEX + 2);
+    });
+
+    it('stops automatic shifting once the player has manually shifted', () => {
+      const bike = createBike();
+      bike.applyInput(1 / 60, { ...noInput, gearUp: true });
+      const manualGear = bike.gearIndex;
+      expect(bike.gearMode).toBe('manual');
+
+      // Speed well above this gear's upshift boundary would auto-upshift if still in auto mode.
+      bike.speed = GEAR_UPSHIFT_SPEED[manualGear] + 10;
+      bike.applyInput(1 / 60, noInput);
+
+      expect(bike.gearIndex).toBe(manualGear);
+    });
+  });
+
+  it("scales chassis propulsion force by the current gear's accel multiplier", () => {
+    const lowGear = createBike();
+    lowGear.gearMode = 'manual';
+    lowGear.gearIndex = 0;
+    const highGear = createBike();
+    highGear.gearMode = 'manual';
+    highGear.gearIndex = GEARS.length - 1;
+
+    lowGear.applyInput(1 / 60, noInput);
+    highGear.applyInput(1 / 60, noInput);
+
+    expect(lowGear.body.force.length()).toBeCloseTo(BASELINE_ACCEL * GEARS[0].accel * BIKE_MASS);
+    expect(highGear.body.force.length()).toBeCloseTo(
+      BASELINE_ACCEL * GEARS[GEARS.length - 1].accel * BIKE_MASS,
+    );
+  });
+
+  describe("syncAfterStep's speed ceiling", () => {
+    it("clamps speed to the current (low) gear's lower topSpeed ceiling", () => {
+      const bike = createBike();
+      bike.gearIndex = 0;
+      bike.body.velocity.set(0, 0, 20); // above this gear's ceiling, below the preset MAX_SPEED
+
+      bike.syncAfterStep(1 / 60);
+
+      const expectedMax = MAX_SPEED * GEARS[0].topSpeed;
+      expect(bike.speed).toBeCloseTo(expectedMax);
+      expect(bike.body.velocity.length()).toBeCloseTo(expectedMax);
+    });
+
+    it("raises the speed ceiling above the preset's own MAX_SPEED in a high gear", () => {
+      const bike = createBike();
+      bike.gearIndex = GEARS.length - 1;
+      bike.body.velocity.set(0, 0, 30); // above default MAX_SPEED (25), below the gear-raised ceiling
+
+      bike.syncAfterStep(1 / 60);
+
+      expect(bike.speed).toBeCloseTo(30);
+    });
   });
 });
 

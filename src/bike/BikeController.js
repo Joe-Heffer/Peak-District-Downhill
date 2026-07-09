@@ -279,6 +279,49 @@ const BIKE_PRESETS = {
   ebike: { baselineAccel: 4.8, boostAccel: 8.0, maxSpeed: 35 },
 };
 
+// Gear change mechanic (issue #62): a discrete accel/top-speed tradeoff layered on top of
+// whichever preset above is active — the same "multiply baselineAccel/boostAccel/maxSpeed"
+// approach BIKE_PRESETS already uses for bike selection, just switchable mid-ride instead
+// of fixed at spawn. Gear 3 (index 2, DEFAULT_GEAR_INDEX) is a deliberate 1.0/1.0 no-op so
+// today's tuned preset numbers are exactly what a default-gear ride already produces —
+// gears 1-2 and 4-5 are pure deviations from that in either direction, not a rebalance of
+// the baseline. Low gears trade a higher accel multiplier for a lower top-speed ceiling
+// (quick off the line, tops out fast — climbs/technical sections); high gears trade slower
+// acceleration for a raised ceiling (slow to build speed, but carries more into a jump or
+// down a straight — descents). Not a real derailleur/cadence simulation, per the issue's
+// explicit scope.
+const GEARS = [
+  { accel: 1.6, topSpeed: 0.55 },
+  { accel: 1.3, topSpeed: 0.75 },
+  { accel: 1.0, topSpeed: 1.0 }, // neutral — matches today's tuning
+  { accel: 0.8, topSpeed: 1.2 },
+  { accel: 0.65, topSpeed: 1.4 },
+];
+const DEFAULT_GEAR_INDEX = 2;
+
+// Automatic mode (the default — issue: "automatic as the default so the game is still
+// playable without discovering the control") shifts purely off this.speed. Two boundary
+// arrays rather than one give the hysteresis the issue asks for ("so it doesn't hunt
+// between gears"): GEAR_UPSHIFT_SPEED[i] is the speed at which gear i shifts up to i+1,
+// GEAR_DOWNSHIFT_SPEED[i] is the (comfortably lower) speed at which gear i+1 falls back to
+// i — see autoShiftGear() below, which only ever checks the two boundaries adjacent to the
+// *current* gear, so it can only shift one gear per check rather than re-scanning the
+// whole range.
+const GEAR_UPSHIFT_SPEED = [4, 8, 13, 18]; // m/s, boundary between gear i and i+1
+const GEAR_DOWNSHIFT_SPEED = [2, 5, 9, 14]; // m/s, comfortably below the matching upshift
+// s — debounces manual gear-up/gear-down input (both keyboard repeat and a held touch
+// button) so one press reliably means one shift, not a rapid multi-gear jump.
+const GEAR_SHIFT_COOLDOWN = 0.3;
+
+// Pure so it's directly unit-testable without driving real physics — only ever moves the
+// gear index by one step per call, toward whichever adjacent boundary this.speed has
+// actually crossed (or leaves it unchanged if it's within the hysteresis gap).
+function autoShiftGear(gearIndex, speed) {
+  if (gearIndex < GEARS.length - 1 && speed > GEAR_UPSHIFT_SPEED[gearIndex]) return gearIndex + 1;
+  if (gearIndex > 0 && speed < GEAR_DOWNSHIFT_SPEED[gearIndex - 1]) return gearIndex - 1;
+  return gearIndex;
+}
+
 // Rider pose (issue #126): blends a seated "climbing" pose and a low "attack
 // position" descending pose via a single -1..+1 pose factor (see
 // updateRiderPose()), driven by slope/speed/boost/brake rather than a fixed
@@ -406,6 +449,9 @@ export class BikeController {
     this.previousVerticalVelocity = 0;
     this.hardLanding = false;
     this.stuckTimer = 0;
+    this.gearIndex = DEFAULT_GEAR_INDEX;
+    this.gearMode = 'auto'; // 'auto' | 'manual' — see applyInput()'s gear-shift handling
+    this.gearShiftCooldown = 0;
 
     this.spawnPoint = { x: spawnPoint.x, z: spawnPoint.z };
 
@@ -573,6 +619,9 @@ export class BikeController {
     this.cameraYawOffset = 0;
     this.riderPoseFactor = 0;
     this.riderLandingAbsorb = 0;
+    this.gearIndex = DEFAULT_GEAR_INDEX;
+    this.gearMode = 'auto';
+    this.gearShiftCooldown = 0;
   }
 
   // Admin command: moves the bike to an arbitrary world (x, z) without resetting
@@ -674,6 +723,24 @@ export class BikeController {
     this.looking = Boolean(inputState.looking);
     this.lookYawInput = typeof inputState.lookYawOffset === 'number' ? inputState.lookYawOffset : 0;
 
+    // Gear change (issue #62): a manual shift request switches gearMode to 'manual' and
+    // stays there for the rest of the run (no toggle back to auto — out of the issue's
+    // scope) — only then do we skip the automatic shift below. gearUp/gearDown are
+    // edge-triggered (like jump/reset), so they're consumed back to false here regardless
+    // of whether the cooldown let them through this frame.
+    this.gearShiftCooldown = Math.max(0, this.gearShiftCooldown - dt);
+    if ((inputState.gearUp || inputState.gearDown) && this.gearShiftCooldown <= 0) {
+      this.gearMode = 'manual';
+      if (inputState.gearUp) this.gearIndex = Math.min(GEARS.length - 1, this.gearIndex + 1);
+      if (inputState.gearDown) this.gearIndex = Math.max(0, this.gearIndex - 1);
+      this.gearShiftCooldown = GEAR_SHIFT_COOLDOWN;
+    }
+    inputState.gearUp = false;
+    inputState.gearDown = false;
+    if (this.gearMode === 'auto') {
+      this.gearIndex = autoShiftGear(this.gearIndex, this.speed);
+    }
+
     // Propulsion as a direct chassis-CoM force (not vehicle.applyEngineForce on the rear
     // wheel) — slope-induced acceleration comes for free from gravity + wheel ground
     // contact either way, but driving the real BASELINE_ACCEL/BOOST_ACCEL magnitudes
@@ -690,7 +757,9 @@ export class BikeController {
     // Boost replaces baseline (rather than stacking on top of it) while held with
     // stamina left (issue #139) — at 0 stamina, holding boost falls back to baseline
     // alone, not a weaker fallback rate.
-    const engineAccel = inputState.boost && this.stamina > 0 ? this.boostAccel : this.baselineAccel;
+    const engineAccel =
+      (inputState.boost && this.stamina > 0 ? this.boostAccel : this.baselineAccel) *
+      GEARS[this.gearIndex].accel;
     this.vehicle.applyEngineForce(0, WHEEL_REAR);
     const forward = this.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
     this.body.applyForce(forward.scale(engineAccel * BIKE_MASS));
@@ -753,10 +822,13 @@ export class BikeController {
   syncAfterStep(dt = 1 / 60) {
     // Defensive ceiling for artifact-steep terrain cells, applied to the real chassis
     // velocity rather than a scalar (see MAX_SPEED's original comment). Uses this.maxSpeed
-    // (per-preset, issue #110) rather than the module constant directly.
+    // (per-preset, issue #110) scaled by the current gear's topSpeed multiplier (issue
+    // #62) rather than the module constant directly — this is what actually gives a
+    // higher gear a higher top speed, since this clamp is what caps descending speed.
+    const effectiveMaxSpeed = this.maxSpeed * GEARS[this.gearIndex].topSpeed;
     const rawHorizontalSpeed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
-    if (rawHorizontalSpeed > this.maxSpeed) {
-      const scale = this.maxSpeed / rawHorizontalSpeed;
+    if (rawHorizontalSpeed > effectiveMaxSpeed) {
+      const scale = effectiveMaxSpeed / rawHorizontalSpeed;
       this.body.velocity.x *= scale;
       this.body.velocity.z *= scale;
     }
@@ -768,7 +840,7 @@ export class BikeController {
     // not its own local +Z.
     const forward = this.body.quaternion.vmult(new CANNON.Vec3(0, 0, -1));
     this.yaw = Math.atan2(forward.x, forward.z);
-    this.speed = Math.min(rawHorizontalSpeed, this.maxSpeed);
+    this.speed = Math.min(rawHorizontalSpeed, effectiveMaxSpeed);
     // Signed: positive means moving toward the mesh's nose, negative means rolling
     // backward — drives the reverse-steering compensation in applyInput above.
     this.forwardSpeed = this.body.velocity.dot(forward);

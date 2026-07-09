@@ -161,6 +161,18 @@ html, body {
   background: #c24a4a;
 }
 
+#gear-indicator {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(20, 20, 20, 0.35);
+  border-radius: 4px;
+}
+
+#gear-indicator:empty {
+  display: none;
+}
+
 #hud-score {
   /* top offset clears #hud-topleft's tallest realistic stack (wrapped credits line +
      location pill + stamina bar) so the two never overlap even though this block is
@@ -433,6 +445,13 @@ html, body {
   gap: 16px;
 }
 
+#gear-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: center;
+}
+
 .control-zone {
   pointer-events: auto;
   touch-action: none;
@@ -489,4 +508,18 @@ html, body {
 .control-zone--boost.is-boosting {
   background: rgba(255, 200, 40, 0.85);
   box-shadow: 0 0 12px rgba(255, 200, 40, 0.9);
+}
+
+/* Smaller than the base thumb-sized circle (issue #62): a gear shift is a discrete
+   two-state tap, not a held/aimed control, so it doesn't need the same footprint as
+   steering/brake/boost/jump. */
+.control-zone--gear {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+  background: rgba(90, 90, 90, 0.55);
+}
+
+.control-zone--gear:active {
+  background: rgba(90, 90, 90, 0.8);
 }

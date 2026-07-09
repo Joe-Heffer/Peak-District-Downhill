@@ -180,6 +180,7 @@ async function init() {
   const locationEl = document.getElementById('location');
   const staminaFillEl = document.getElementById('stamina-bar-fill');
   const boostBtnEl = document.getElementById('boost-btn');
+  const gearIndicatorEl = document.getElementById('gear-indicator');
   const scoreValueEl = document.getElementById('score-value');
   const comboValueEl = document.getElementById('combo-value');
   const scoreBestEl = document.getElementById('score-best');
@@ -265,6 +266,10 @@ async function init() {
         staminaFillEl.classList.toggle('is-empty', bike.stamina <= 0);
       }
       if (boostBtnEl) boostBtnEl.classList.toggle('is-boosting', bike.boostActive);
+      if (gearIndicatorEl) {
+        gearIndicatorEl.textContent =
+          `GEAR ${bike.gearIndex + 1}${bike.gearMode === 'auto' ? ' · AUTO' : ''}`;
+      }
 
       const landcoverClass = terrain.getLandcoverAt(bike.mesh.position.x, bike.mesh.position.z);
       const scoreEvents = scoreTracker.update(dt, bike, landcoverClass);
