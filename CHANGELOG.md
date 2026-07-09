@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.5.0...peak-district-downhill-v0.6.0) (2026-07-09)
+
+
+### Features
+
+* add coverage reporting with enforced CI thresholds ([#219](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/219)) ([9107881](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/9107881f88ebd42f6087d9bf37ca4b9037d6e851))
+* add gear change mechanic ([#62](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/62)) ([#225](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/225)) ([4102f5f](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/4102f5f679efae0d74b4b64457e06368e1005a60))
+* add heather and bracken shrub scatter layers to moorland scenery ([#216](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/216)) ([e4b69ce](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/e4b69ce70fd72188500d769f83bb8e8a8fb5ff30))
+* add height-based ground mist layered over distance fog ([#213](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/213)) ([ec42bd1](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/ec42bd1999ac74bece2699d6d5f8d4dd0154dc4c)), closes [#156](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/156)
+* add persistent tyre track trail behind the bike ([#218](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/218)) ([0925127](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/09251272a2c84d779b89d9753b31b6de22ea42a3))
+* bake real building footprints and water features from OpenStreetMap ([#223](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/223)) ([1dd4de7](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/1dd4de7c98835fe8103610a4a2c9fbedc6444f6f))
+* chunk the terrain mesh into THREE.LOD tiles ([#71](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/71)) ([#227](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/227)) ([a08316a](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/a08316a3ca776f13493bbfa2a3e13ae8e66d75ba))
+* free-look camera via mouse/touch drag ([#39](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/39)) ([#222](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/222)) ([dc3a936](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/dc3a9364eade1465694a6b665646dbfc96f20040))
+* give the ridden trail chunky, rocky cross-section relief ([#215](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/215)) ([2e1e2e8](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/2e1e2e846f55791398377d704ce4c7b22b43750a))
+* give the ridden trail chunky, rocky cross-section relief ([#217](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/217)) ([40ae86a](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/40ae86a70c966aa83ae66b13388680e7fcad9d2c))
+
+
+### Bug Fixes
+
+* sample terrain height on the same triangulation the mesh renders ([#226](https://github.com/Joe-Heffer/Peak-District-Downhill/issues/226)) ([2ac036a](https://github.com/Joe-Heffer/Peak-District-Downhill/commit/2ac036afa5935bafe64d4c0706a6e810f1a02421))
+
 ## [0.5.0](https://github.com/Joe-Heffer/Peak-District-Downhill/compare/peak-district-downhill-v0.4.0...peak-district-downhill-v0.5.0) (2026-07-08)
 
 
