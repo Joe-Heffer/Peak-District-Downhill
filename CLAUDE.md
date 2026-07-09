@@ -138,15 +138,21 @@ change one side's indexing/rotation without updating the other to match.
 - `.github/workflows/ci.yml` — installs and builds, runs the Vitest unit suite with
   coverage thresholds enforced (uploading the `coverage/` report as a build artifact),
   and runs the Playwright e2e smoke suite (three independent parallel jobs) on push/PR
-  to `main`.
+  to `main`, gated by a `paths` filter (`src/**`, `public/**`, `tools/**`, `e2e/**`,
+  `index.html`, `package.json`, `package-lock.json`, `vite.config.js`,
+  `vitest.config.js`, `playwright.config.js`, plus the workflow file itself) so
+  doc-only or unrelated changes don't trigger a build/test/e2e run.
 - `.github/workflows/deploy.yml` — builds and deploys `dist/` to GitHub Pages on push
-  to `main`, or on manual `workflow_dispatch`.
+  to `main` (same kind of `paths` filter as `ci.yml`, minus the test-only paths), or on
+  manual `workflow_dispatch` (always runs, regardless of which paths changed).
 - `.github/workflows/itch-deploy.yml` — builds with `npm run build:itch` and publishes
-  `dist-itch/` to itch.io via `butler` (see `docs/itch-io.md`) on push to `main`, or on
-  manual `workflow_dispatch`.
+  `dist-itch/` to itch.io via `butler` (see `docs/itch-io.md`) on push to `main` (same
+  `paths` filter as `deploy.yml`), or on manual `workflow_dispatch`.
 - `.github/workflows/release-please.yml` — maintains a release PR and cuts GitHub
   Releases from Conventional Commits on `main` (config: `release-please-config.json`,
-  `.release-please-manifest.json`).
+  `.release-please-manifest.json`). Deliberately has no `paths` filter — it must see
+  every commit on `main` to parse Conventional Commits correctly, regardless of which
+  files that commit touched.
 
 Neither `ci.yml` nor `deploy.yml` ever regenerates terrain/route data — both just run
 `npm run build`, which uses whatever is already committed under `public/data/`.
